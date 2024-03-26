@@ -1,0 +1,647 @@
+---
+title: "Mortalidade ASMA"
+author: "Marcos Antunes"
+format: html
+editor: visual
+---
+
+```{r}
+library(gtsummary)
+library(dplyr)
+library(markdown)
+library(forecast)
+library(nortest)
+library(gtsummary)
+library(janitor)
+```
+
+## Quarto
+
+```{r, message=FALSE,echo=FALSE, warning=FALSE}
+#filter function
+#filter_rows <- function(data) {
+  df_1 <- filter(data, grepl("J45|J46", data$CAUSABAS))
+  df_2 <- filter(data, grepl("J45|J46", data$LINHAA))
+  df_3 <- filter(data, grepl("J45|J46", data$LINHAB))
+  df_4 <- filter(data, grepl("J45|J46", data$LINHAC))
+  df_5 <- filter(data, grepl("J45|J46", data$LINHAD))
+  result <- bind_rows(df_1, df_2, df_3, df_4, df_5) %>% distinct()
+  return(result)
+}
+
+filter_rows <- function(data) {
+  df_1 <- filter(data, grepl("J45", data$CAUSABAS))
+  df_2 <- filter(data, grepl("J46", data$CAUSABAS))
+  result <- bind_rows(df_1, df_2) %>% distinct()
+  return(result)
+}
+
+
+
+df_2001 = read.csv("Mortalidade_Geral_2001.csv", sep = ";")
+df_2001 = filter_rows(df_2001)
+
+df_2002 <- read.csv("Mortalidade_Geral_2002.csv", sep =";", fileEncoding = "latin1")
+df_2002 <- filter_rows(df_2002)
+
+df_2003 <- read.csv("Mortalidade_Geral_2003.csv", sep = ";")
+df_2003 <- filter_rows(df_2003)
+
+df_2004 <- read.csv("Mortalidade_Geral_2004.csv", sep = ";")
+df_2004 <- filter_rows(df_2004)
+
+df_2005 <- read.csv("Mortalidade_Geral_2005.csv", sep = ";", fileEncoding = "latin1")
+df_2005 <- filter_rows(df_2005)
+
+df_2006 <- read.csv("Mortalidade_Geral_2006.csv", sep = ";")
+df_2006 <- filter_rows(df_2006)
+
+df_2007 <- read.csv("Mortalidade_Geral_2007.csv", sep = ";")
+df_2007 <- filter_rows(df_2007)
+
+df_2008 <- read.csv("Mortalidade_Geral_2008.csv", sep = ";")
+df_2008 <- filter_rows(df_2008)
+
+df_2009 <- read.csv("Mortalidade_Geral_2009.csv", sep = ";")
+df_2009 <- filter_rows(df_2009)
+
+df_2010 <- read.csv("Mortalidade_Geral_2010.csv", sep = ";")
+df_2010 <- filter_rows(df_2010)
+
+df_2011 <- read.csv("Mortalidade_Geral_2011.csv", sep = ";")
+df_2011 <- filter_rows(df_2011)
+
+df_2012 <- read.csv("Mortalidade_Geral_2012.csv", sep = ";")
+df_2012 <- filter_rows(df_2012)
+
+df_2013 <- read.csv("Mortalidade_Geral_2013.csv", sep = ";")
+df_2013 <- filter_rows(df_2013)
+
+df_2014 <- read.csv("Mortalidade_Geral_2014.csv", sep = ";")
+df_2014 <- filter_rows(df_2014)
+
+df_2015 <- read.csv("Mortalidade_Geral_2015.csv", sep = ";")
+df_2015 <- filter_rows(df_2015)
+
+df_2016 <- read.csv("Mortalidade_Geral_2016.csv", sep = ";")
+df_2016 <- filter_rows(df_2016)
+
+df_2017 <- read.csv("Mortalidade_Geral_2017.csv", sep = ";")
+df_2017 <- filter_rows(df_2017)
+
+df_2018 <- read.csv("Mortalidade_Geral_2018.csv", sep = ";")
+df_2018 <- filter_rows(df_2018)
+
+df_2019 <- read.csv("Mortalidade_Geral_2019.csv", sep = ";")
+df_2019 <- filter_rows(df_2019)
+
+df_2020 <- read.csv("Mortalidade_Geral_2020.csv", sep = ";")
+df_2020 <- filter_rows(df_2020)
+
+df_2021 <- read.csv("Mortalidade_Geral_2021.csv", sep = ";")
+df_2021 <- filter_rows(df_2021)
+
+df_2014_2021 = rbind(df_2014,df_2015,df_2016,df_2017,df_2018,df_2019,df_2020,df_2021)
+df_2014_2021 = clean_names(df_2014_2021)
+
+df_2014_2021$contador = rep(1:19105,1)
+
+rm(df_2014,df_2015,df_2016,df_2017,df_2018,df_2019,df_2020,df_2021)
+
+decode_age <- function(idade) {
+  primeiro_digito <- substr(idade, 1, 1)
+  segundo_terceiro_digitos <- as.numeric(substr(idade, 2, 3))
+  
+  if (primeiro_digito == "0") {
+    return(segundo_terceiro_digitos)
+  } else if (primeiro_digito == "1") {
+    return(segundo_terceiro_digitos)
+  } else if (primeiro_digito == "2") {
+    return(segundo_terceiro_digitos)
+  } else if (primeiro_digito == "3") {
+    return(segundo_terceiro_digitos)
+  } else if (primeiro_digito == "4") {
+    return(segundo_terceiro_digitos)
+  } else if (primeiro_digito == "5") {
+    return(segundo_terceiro_digitos + 100)
+  } else {
+    return(NA)
+  }
+}
+
+df_2014_2021 <- df_2014_2021 %>%
+  mutate(idade_quantidade = sapply(idade, decode_age))
+
+# Criando um vetor com os códigos UF
+uf_codes <- c("11" = "RO",
+                 "12" = "AC",
+                 "13" = "AM",
+                 "14" = "RR",
+                 "15" = "PA",
+                 "16" = "AP",
+                 "17" = "TO",
+                 "21" = "MA",
+                 "22" = "PI",
+                 "23" = "CE",
+                 "24" = "RN",
+                 "25" = "PB",
+                 "26" = "PE",
+                 "27" = "AL",
+                 "28" = "SE",
+                 "29" = "BA",
+                 "31" = "MG",
+                 "32" = "ES",
+                 "33" = "RJ",
+                 "35" = "SP",
+                 "41" = "PR",
+                 "42" = "SC",
+                 "43" = "RS",
+                 "50" = "MS",
+                 "51" = "MT",
+                 "52" = "GO",
+                 "53" = "DF")
+             
+df_2014_2021  = df_2014_2021 %>%
+  mutate(natural_cond = ifelse(substr(natural, 1, 1) == 8,
+                               uf_codes[substr(natural, 2, 3)],
+                               'Foreigne'))
+
+
+# Atribuindo o valor 'ignorado' aos valores NA
+df_2014_2021$natural_cond[is.na(df_2014_2021$natural_cond)] <- 'Ignored'
+
+#factors
+df_2014_2021$sexo <- factor(df_2014_2021$sexo, levels = c(0,1,2), 
+                   labels = c("Ignored", 
+                              "Male",
+                              "Female")) #corrigido sexo
+
+
+df_2014_2021$racacor <- factor(df_2014_2021$racacor, levels = c(1,2,3,4,5), 
+                   labels = c("White", 
+                              "Black",
+                              "Yellow",
+                              "Brown",
+                              "Indigenous"))
+
+
+df_2014_2021$racacor[is.na(df_2014_2021$racacor)] <- 'Ignored'
+
+df_2014_2021$esc2010 <- factor(df_2014_2021$esc2010, levels = c(0,1,2,3,4,5,9), 
+                   labels = c("No schooling", 
+                              "1st to 4th grade",
+                              "5th to 8th grade",
+                              "Former high school",
+                              "Incomplete higher education",
+                              "Complete higher education",
+                              "Ignored"))
+
+df_2014_2021$esc2010[is.na(df_2014_2021$esc2010)] = 'Ignored'
+
+
+df_2014_2021$lococor <- factor(df_2014_2021$lococor, levels = c(1,2,3,4,5,6,9), 
+                   labels = c("Hospital", 
+                              "Other health establishment",
+                              "Home",
+                              "Public way",
+                              "Other",
+                              "Other",
+                              "Ignored"))
+
+df_2014_2021$lococor[is.na(df_2014_2021$lococor)] = 'Ignored'
+
+
+df_2014_2021$assistmed <- factor(df_2014_2021$assistmed, levels = c(1,2,9), 
+                   labels = c("With assistance", 
+                              "Without assistance",
+                              "Ignored"))
+
+df_2014_2021$assistmed[is.na(df_2014_2021$assistmed)] = 'Ignored'
+
+# Dicionário de CIDs e seus respectivos nomes de doenças
+df_2014_2021$linhaa = recode(df_2014_2021$linhaa,
+                             "*J180" = "Broncopneumonia",
+"*J960"="Insuficiência respiratória aguda",
+"*A419"="Septicemia não especificada",
+"*J969"="Insuficiência respiratória não especificada",
+"*R092"="Parada respiratória",
+"*J459"="Asma não especificada",
+"*R99X"="Causas desconhecidas de mortalidade",
+"*J189"="Pneumonia não especificada, aguda ou não especificada",
+"*I219"="IAM",
+"*R688"="Outros sintomas e sinais gerais",
+"*I469"="Parada cardíaca, não especificada",
+"*J81X"="Edema pulmonar não classificado em outra parte",
+"*R570"="Choque cardiogênico",
+"*J449"="DPOC",
+"*I10X"="Hipertensão essencial (primária) não especificada",
+"*R98X"="Morte sem assistência",
+"*R960"="Morte instantânea",
+"*R578"="Outros formas de choque",
+"*R579"="Choque não-específico",
+"*B342*U071"="COVID-19",
+"*J159"="Pneumonia bacteriana não especificada",
+"*I509"="Insuficiência cardíaca não especificada",
+"*J988*U049"="Outros transtornos respiratórios especificados e asma, SARS",
+"*I500"="Insuficiência cardíaca congestiva",
+"*G931"="Lesão encefálica anóxica",
+"*J984"="Outros transtornos respiratórios especificados",
+"*R090"="Asfixia",
+"*J980"="Outros distúrbios dos brônquios",
+"*J80X"="Síndrome da angústia respiratória aguda",
+"*I269"="Embolia Pulmonar sem cor pulmonale",
+"*J961"="Insuficiência respiratória crônica",
+"*I499"="Arritmia cardíaca",
+"*N179"="Insuficiência renal aguda, não especificada",
+"*J46X"="Estado de mal asmático",
+"*J988"="Outros transtornos respiratórios especificados",
+"*A418"="Outras sepecticemias",
+"*I64X"="Acidente vascular cerebral, não especificado como hemorrágico ou isquêmico",
+"*E872"="Acidose",
+"*R54X"="Senilidade",
+"*J450"="Asma",
+"*R571"="Hipotensão arterial",
+"*J439"="Enfisema não especificada",
+"*B342*U072"="COVID-19",
+"*J690"="Pneumonia aspirativa",
+"*R961"="Morte em 24 horas",
+"*E149"="Diabetes mellitus não especificado, sem complicações",
+"*G936"="Endema cerebral",
+"*I461"="Morte súbita",
+"*J441"="Doença pulmonar obstrutiva crônica com exacerbação aguda",
+"*J458"="Asma mista",
+"*J40X"="Bronquite não especificada como aguda ou crônica",
+"*J989"="Doença respiratória crônica não especificada",
+"*J440"="DPOC com infecção respiratória",
+"*I279"="Doença cardiopulomnar não especificada",
+"*I678"="Doenças cerebrovasculares especificadas",
+"*J96X"="Insuficiência respiratória",
+"*R060"="Dispneia",
+"*I519"="Insuficiência cardíaca, não especificada",
+"*J45X"="Asma não especificada",
+"*E875"="Hiperpotassemia ",
+"*J22X"="Infecção aguda não especificada do trato respiratório inferior",
+"*N189"="Doença renal crônica, não especificada",
+"B342"="COVID-19",
+"J448"="Outras DPOCs",
+"J46" = "Estado de mal asmático",
+"J451" = "Asma não-alérgica",
+"C349" = "Neoplasia de brônquios ou pulmões",
+"U072" = "COVID-19")
+
+df_2014_2021$linhab = recode(df_2014_2021$linhab,
+"*J180" = "Broncopneumonia",
+"*J960"="Insuficiência respiratória aguda",
+"*A419"="Septicemia não especificada",
+"*J969"="Insuficiência respiratória não especificada",
+"*R092"="Parada respiratória",
+"*J459"="Asma não especificada",
+"*R99X"="Causas desconhecidas de mortalidade",
+"*J189"="Pneumonia não especificada, aguda ou não especificada",
+"*I219"="IAM",
+"*R688"="Outros sintomas e sinais gerais",
+"*I469"="Parada cardíaca, não especificada",
+"*J81X"="Edema pulmonar não classificado em outra parte",
+"*R570"="Choque cardiogênico",
+"*J449"="DPOC",
+"*I10X"="Hipertensão essencial (primária) não especificada",
+"*R98X"="Morte sem assistência",
+"*R960"="Morte instantânea",
+"*R578"="Outros formas de choque",
+"*R579"="Choque não-específico",
+"*B342*U071*"="COVID-19",
+"*J159"="Pneumonia bacteriana não especificada",
+"*I509"="Insuficiência cardíaca não especificada",
+"*J988*U049*"="Outros transtornos respiratórios especificados e asma, SARS",
+"*I500"="Insuficiência cardíaca congestiva",
+"*G931"="Lesão encefálica anóxica",
+"*J984"="Outros transtornos respiratórios especificados",
+"*R090"="Asfixia",
+"*J980"="Outros distúrbios dos brônquios",
+"*J80X"="Síndrome da angústia respiratória aguda",
+"*I269"="Embolia Pulmonar sem cor pulmonale",
+"*J961"="Insuficiência respiratória crônica",
+"*I499"="Arritmia cardíaca",
+"*N179"="Insuficiência renal aguda, não especificada",
+"*J46X"="Estado de mal asmático",
+"*J988"="Outros transtornos respiratórios especificados",
+"*A418"="Outras sepecticemias",
+"*I64X"="Acidente vascular cerebral, não especificado como hemorrágico ou isquêmico",
+"*E872"="Acidose",
+"*R54X"="Senilidade",
+"*J450"="Asma",
+"*R571"="Hipotensão arterial",
+"*J439"="Enfisema não especificada",
+"*B342*U072"="COVID-19",
+"*J690"="Pneumonia aspirativa",
+"*R961"="Morte em 24 horas",
+"*E149"="Diabetes mellitus não especificado, sem complicações",
+"*G936"="Endema cerebral",
+"*I461"="Morte súbita",
+"*J441"="Doença pulmonar obstrutiva crônica com exacerbação aguda",
+"*J458"="Asma mista",
+"*J40X"="Bronquite não especificada como aguda ou crônica",
+"*J989"="Doença respiratória crônica não especificada",
+"*J440"="DPOC com infecção respiratória",
+"*I279"="Doença cardiopulomnar não especificada",
+"*I678"="Doenças cerebrovasculares especificadas",
+"*J96X"="Insuficiência respiratória",
+"*R060"="Dispneia",
+"*I519"="Insuficiência cardíaca, não especificada",
+"*J45X"="Asma não especificada",
+"*E875"="Hiperpotassemia ",
+"*J22X"="Infecção aguda não especificada do trato respiratório inferior",
+"*N189"="Doença renal crônica, não especificada",
+"B342"="COVID-19",
+"J448"="Outras DPOCs",
+"J46" = "Estado de mal asmático",
+"J451" = "Asma não-alérgica",
+"C349" = "Neoplasia de brônquios ou pulmões",
+"U072" = "COVID-19")
+
+df_2014_2021$linhac = recode(df_2014_2021$linhac,
+                             "*J180" = "Broncopneumonia",
+"*J960"="Insuficiência respiratória aguda",
+"*A419"="Septicemia não especificada",
+"*J969"="Insuficiência respiratória não especificada",
+"*R092"="Parada respiratória",
+"*J459"="Asma não especificada",
+"*R99X"="Causas desconhecidas de mortalidade",
+"*J189"="Pneumonia não especificada, aguda ou não especificada",
+"*I219"="IAM",
+"*R688"="Outros sintomas e sinais gerais",
+"*I469"="Parada cardíaca, não especificada",
+"*J81X"="Edema pulmonar não classificado em outra parte",
+"*R570"="Choque cardiogênico",
+"*J449"="DPOC",
+"*I10X"="Hipertensão essencial (primária) não especificada",
+"*R98X"="Morte sem assistência",
+"*R960"="Morte instantânea",
+"*R578"="Outros formas de choque",
+"*R579"="Choque não-específico",
+"*B342*U071*"="COVID-19",
+"*J159"="Pneumonia bacteriana não especificada",
+"*I509"="Insuficiência cardíaca não especificada",
+"*J988*U049*"="Outros transtornos respiratórios especificados e asma, SARS",
+"*I500"="Insuficiência cardíaca congestiva",
+"*G931"="Lesão encefálica anóxica",
+"*J984"="Outros transtornos respiratórios especificados",
+"*R090"="Asfixia",
+"*J980"="Outros distúrbios dos brônquios",
+"*J80X"="Síndrome da angústia respiratória aguda",
+"*I269"="Embolia Pulmonar sem cor pulmonale",
+"*J961"="Insuficiência respiratória crônica",
+"*I499"="Arritmia cardíaca",
+"*N179"="Insuficiência renal aguda, não especificada",
+"*J46X"="Estado de mal asmático",
+"*J988"="Outros transtornos respiratórios especificados",
+"*A418"="Outras sepecticemias",
+"*I64X"="Acidente vascular cerebral, não especificado como hemorrágico ou isquêmico",
+"*E872"="Acidose",
+"*R54X"="Senilidade",
+"*J450"="Asma",
+"*R571"="Hipotensão arterial",
+"*J439"="Enfisema não especificada",
+"*B342*U072"="COVID-19",
+"*J690"="Pneumonia aspirativa",
+"*R961"="Morte em 24 horas",
+"*E149"="Diabetes mellitus não especificado, sem complicações",
+"*G936"="Endema cerebral",
+"*I461"="Morte súbita",
+"*J441"="Doença pulmonar obstrutiva crônica com exacerbação aguda",
+"*J458"="Asma mista",
+"*J40X"="Bronquite não especificada como aguda ou crônica",
+"*J989"="Doença respiratória crônica não especificada",
+"*J440"="DPOC com infecção respiratória",
+"*I279"="Doença cardiopulomnar não especificada",
+"*I678"="Doenças cerebrovasculares especificadas",
+"*J96X"="Insuficiência respiratória",
+"*R060"="Dispneia",
+"*I519"="Insuficiência cardíaca, não especificada",
+"*J45X"="Asma não especificada",
+"*E875"="Hiperpotassemia ",
+"*J22X"="Infecção aguda não especificada do trato respiratório inferior",
+"*N189"="Doença renal crônica, não especificada",
+"B342"="COVID-19",
+"J448"="Outras DPOCs",
+"J46" = "Estado de mal asmático",
+"J451" = "Asma não-alérgica",
+"C349" = "Neoplasia de brônquios ou pulmões",
+"U072" = "COVID-19")
+
+summary(factor(df_2014_2021$linhab))
+
+df_2014_2021$linhad = recode(df_2014_2021$linhad,
+                             "*J180" = "Broncopneumonia",
+"*J960"="Insuficiência respiratória aguda",
+"*A419"="Septicemia não especificada",
+"*J969"="Insuficiência respiratória não especificada",
+"*R092"="Parada respiratória",
+"*J459"="Asma não especificada",
+"*R99X"="Causas desconhecidas de mortalidade",
+"*J189"="Pneumonia não especificada, aguda ou não especificada",
+"*I219"="IAM",
+"*R688"="Outros sintomas e sinais gerais",
+"*I469"="Parada cardíaca, não especificada",
+"*J81X"="Edema pulmonar não classificado em outra parte",
+"*R570"="Choque cardiogênico",
+"*J449"="DPOC",
+"*I10X"="Hipertensão essencial (primária) não especificada",
+"*R98X"="Morte sem assistência",
+"*R960"="Morte instantânea",
+"*R578"="Outros formas de choque",
+"*R579"="Choque não-específico",
+"*B342*U071*"="COVID-19",
+"*J159"="Pneumonia bacteriana não especificada",
+"*I509"="Insuficiência cardíaca não especificada",
+"*J988*U049*"="Outros transtornos respiratórios especificados e asma, SARS",
+"*I500"="Insuficiência cardíaca congestiva",
+"*G931"="Lesão encefálica anóxica",
+"*J984"="Outros transtornos respiratórios especificados",
+"*R090"="Asfixia",
+"*J980"="Outros distúrbios dos brônquios",
+"*J80X"="Síndrome da angústia respiratória aguda",
+"*I269"="Embolia Pulmonar sem cor pulmonale",
+"*J961"="Insuficiência respiratória crônica",
+"*I499"="Arritmia cardíaca",
+"*N179"="Insuficiência renal aguda, não especificada",
+"*J46X"="Estado de mal asmático",
+"*J988"="Outros transtornos respiratórios especificados",
+"*A418"="Outras sepecticemias",
+"*I64X"="Acidente vascular cerebral, não especificado como hemorrágico ou isquêmico",
+"*E872"="Acidose",
+"*R54X"="Senilidade",
+"*J450"="Asma",
+"*R571"="Hipotensão arterial",
+"*J439"="Enfisema não especificada",
+"*B342*U072"="COVID-19",
+"*J690"="Pneumonia aspirativa",
+"*R961"="Morte em 24 horas",
+"*E149"="Diabetes mellitus não especificado, sem complicações",
+"*G936"="Endema cerebral",
+"*I461"="Morte súbita",
+"*J441"="Doença pulmonar obstrutiva crônica com exacerbação aguda",
+"*J458"="Asma mista",
+"*J40X"="Bronquite não especificada como aguda ou crônica",
+"*J989"="Doença respiratória crônica não especificada",
+"*J440"="DPOC com infecção respiratória",
+"*I279"="Doença cardiopulomnar não especificada",
+"*I678"="Doenças cerebrovasculares especificadas",
+"*J96X"="Insuficiência respiratória",
+"*R060"="Dispneia",
+"*I519"="Insuficiência cardíaca, não especificada",
+"*J45X"="Asma não especificada",
+"*E875"="Hiperpotassemia ",
+"*J22X"="Infecção aguda não especificada do trato respiratório inferior",
+"*N189"="Doença renal crônica, não especificada",
+"B342"="COVID-19",
+"J448"="Outras DPOCs",
+"J46" = "Estado de mal asmático",
+"J451" = "Asma não-alérgica",
+"C349" = "Neoplasia de brônquios ou pulmões",
+"U072" = "COVID-19")
+
+df_2014_2021$linhai = recode(df_2014_2021$linhai,
+                             "*J180" = "Broncopneumonia",
+"*J960"="Insuficiência respiratória aguda",
+"*A419"="Septicemia não especificada",
+"*J969"="Insuficiência respiratória não especificada",
+"*R092"="Parada respiratória",
+"*J459"="Asma não especificada",
+"*R99X"="Causas desconhecidas de mortalidade",
+"*J189"="Pneumonia não especificada, aguda ou não especificada",
+"*I219"="IAM",
+"*R688"="Outros sintomas e sinais gerais",
+"*I469"="Parada cardíaca, não especificada",
+"*J81X"="Edema pulmonar não classificado em outra parte",
+"*R570"="Choque cardiogênico",
+"*J449"="DPOC",
+"*I10X"="Hipertensão essencial (primária) não especificada",
+"*R98X"="Morte sem assistência",
+"*R960"="Morte instantânea",
+"*R578"="Outros formas de choque",
+"*R579"="Choque não-específico",
+"*B342*U071*"="COVID-19",
+"*J159"="Pneumonia bacteriana não especificada",
+"*I509"="Insuficiência cardíaca não especificada",
+"*J988*U049*"="Outros transtornos respiratórios especificados e asma, SARS",
+"*I500"="Insuficiência cardíaca congestiva",
+"*G931"="Lesão encefálica anóxica",
+"*J984"="Outros transtornos respiratórios especificados",
+"*R090"="Asfixia",
+"*J980"="Outros distúrbios dos brônquios",
+"*J80X"="Síndrome da angústia respiratória aguda",
+"*I269"="Embolia Pulmonar sem cor pulmonale",
+"*J961"="Insuficiência respiratória crônica",
+"*I499"="Arritmia cardíaca",
+"*N179"="Insuficiência renal aguda, não especificada",
+"*J46X"="Estado de mal asmático",
+"*J988"="Outros transtornos respiratórios especificados",
+"*A418"="Outras sepecticemias",
+"*I64X"="Acidente vascular cerebral, não especificado como hemorrágico ou isquêmico",
+"*E872"="Acidose",
+"*R54X"="Senilidade",
+"*J450"="Asma",
+"*R571"="Hipotensão arterial",
+"*J439"="Enfisema não especificada",
+"*B342*U072"="COVID-19",
+"*J690"="Pneumonia aspirativa",
+"*R961"="Morte em 24 horas",
+"*E149"="Diabetes mellitus não especificado, sem complicações",
+"*G936"="Endema cerebral",
+"*I461"="Morte súbita",
+"*J441"="Doença pulmonar obstrutiva crônica com exacerbação aguda",
+"*J458"="Asma mista",
+"*J40X"="Bronquite não especificada como aguda ou crônica",
+"*J989"="Doença respiratória crônica não especificada",
+"*J440"="DPOC com infecção respiratória",
+"*I279"="Doença cardiopulomnar não especificada",
+"*I678"="Doenças cerebrovasculares especificadas",
+"*J96X"="Insuficiência respiratória",
+"*R060"="Dispneia",
+"*I519"="Insuficiência cardíaca, não especificada",
+"*J45X"="Asma não especificada",
+"*E875"="Hiperpotassemia ",
+"*J22X"="Infecção aguda não especificada do trato respiratório inferior",
+"*N189"="Doença renal crônica, não especificada",
+"B342"="COVID-19",
+"J448"="Outras DPOCs",
+"J46" = "Estado de mal asmático",
+"J451" = "Asma não-alérgica",
+"C349" = "Neoplasia de brônquios ou pulmões")
+
+
+df_2014_2021$causabas = recode(df_2014_2021$causabas,
+                               "J180" = "Broncopneumonia",
+"J960"="Insuficiência respiratória aguda",
+"A419"="Septicemia não especificada",
+"J969"="Insuficiência respiratória não especificada",
+"R092"="Parada respiratória",
+"J459"="Asma não especificada",
+"R99X"="Causas desconhecidas de mortalidade",
+"J189"="Pneumonia não especificada, aguda ou não especificada",
+"I219"="IAM",
+"R688"="Outros sintomas e sinais gerais",
+"I469"="Parada cardíaca, não especificada",
+"J81X"="Edema pulmonar não classificado em outra parte",
+"R570"="Choque cardiogênico",
+"J449"="DPOC",
+"I10X"="Hipertensão essencial (primária) não especificada",
+"R98X"="Morte sem assistência",
+"R960"="Morte instantânea",
+"R578"="Outros formas de choque",
+"R579"="Choque não-específico",
+"B342U071"="COVID-19",
+"J159"="Pneumonia bacteriana não especificada",
+"I509"="Insuficiência cardíaca não especificada",
+"J988U049"="Outros transtornos respiratórios especificados e asma, SARS",
+"I500"="Insuficiência cardíaca congestiva",
+"G931"="Lesão encefálica anóxica",
+"J984"="Outros transtornos respiratórios especificados",
+"R090"="Asfixia",
+"J980"="Outros distúrbios dos brônquios",
+"J80X"="Síndrome da angústia respiratória aguda",
+"I269"="Embolia Pulmonar sem cor pulmonale",
+"J961"="Insuficiência respiratória crônica",
+"I499"="Arritmia cardíaca",
+"N179"="Insuficiência renal aguda, não especificada",
+"J46X"="Estado de mal asmático",
+"J988"="Outros transtornos respiratórios especificados",
+"A418"="Outras sepecticemias",
+"I64X"="Acidente vascular cerebral, não especificado como hemorrágico ou isquêmico",
+"E872"="Acidose",
+"R54X"="Senilidade",
+"J450"="Asma",
+"R571"="Hipotensão arterial",
+"J439"="Enfisema não especificada",
+"B342*U072"="COVID-19",
+"J690"="Pneumonia aspirativa",
+"R961"="Morte em 24 horas",
+"E149"="Diabetes mellitus não especificado, sem complicações",
+"G936"="Endema cerebral",
+"I461"="Morte súbita",
+"J441"="Doença pulmonar obstrutiva crônica com exacerbação aguda",
+"J458"="Asma mista",
+"J40X"="Bronquite não especificada como aguda ou crônica",
+"J989"="Doença respiratória crônica não especificada",
+"J440"="DPOC com infecção respiratória",
+"I279"="Doença cardiopulomnar não especificada",
+"I678"="Doenças cerebrovasculares especificadas",
+"J96X"="Insuficiência respiratória",
+"R060"="Dispneia",
+"I519"="Insuficiência cardíaca, não especificada",
+"J45X"="Asma não especificada",
+"E875"="Hiperpotassemia ",
+"J22X"="Infecção aguda não especificada do trato respiratório inferior",
+"N189"="Doença renal crônica, não especificada",
+"B342"="COVID-19",
+"J448"="Outras DPOCs",
+"J46" = "Estado de mal asmático",
+"J451" = "Asma não-alérgica",
+"C349" = "Neoplasia de brônquios ou pulmões",
+"U072" = "COVID-19")
+
+
+write.csv(df_2014_2021,"df_2021.csv")
+
+```

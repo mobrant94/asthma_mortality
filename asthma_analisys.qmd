@@ -1,0 +1,1045 @@
+---
+title: "Asthma"
+author: "Marcos Antunes"
+format: html
+editor: visual
+---
+
+```{r, warning=FALSE, message=FALSE}
+pacman::p_load(lubridate,gtsummary,dplyr,markdown,nortest,janitor,ggplot2,ggpubr,tidyverse,readxl,ggstatsplot,lattice,scalesm,RColorBrewer,epitools, scales)
+```
+
+```{r}
+df = read.csv("df_2021.csv", sep = ",") %>% clean_names()
+df1 = read_xlsx("populacao_ano.xlsx")
+
+# Create a named vector of state abbreviations and their corresponding regions
+regions <- c("RO" = "North", "AC" = "North", "AM" = "North", "RR" = "North", "PA" = "North", "AP" = "North", "TO" = "North", "AL" = "Northeast",
+             "MA" = "Northeast", "PI" = "Northeast", "CE" = "Northeast", "RN" = "Northeast", "PB" = "Northeast", 
+             "PE" = "Northeast", "SE" = "Northeast",
+             "BA" = "Northeast", "MG" = "Southeast", "ES" = "Southeast", 
+             "RJ" = "Southeast",  "SP" =  "Southeast",
+             "PR" =  "South",  "SC" =  "South",  "RS" =  "South",
+             "MS" =  "Midwest",  "MT" =  "Midwest",  "GO" =  "Midwest",  "DF" =  "Midwest", "Ignored" = "Ignored", "Foreigne"="Foreigne")
+
+# Add a new column to the data frame that specifies the region based on the state abbreviation
+df$region <- regions[df$natural_cond]
+
+# Create a new column that specifies the age range based on the values in the age column
+df$age_range <- ifelse(df$idade_quantidade < 18, "<18 years", ifelse(df$idade_quantidade >= 60, "60≥ years", "18-59 years"))
+
+df$yearonly <- substr(df$dtobito, nchar(df$dtobito)-3, nchar(df$dtobito))
+df$yearonly = as.numeric(df$yearonly)
+
+
+df$dtobito <- ifelse(nchar(df$dtobito) == 7, paste0("0", df$dtobito), df$dtobito)
+
+# Extract the day, month, and year components from the character date
+day <- substr(df$dtobito, 1, 2)
+month <- substr(df$dtobito, 3, 4)
+year <- substr(df$dtobito, 5, 8)
+
+# Combine the day, month, and year components with dashes between them
+df$dtobito <- paste(day, month, year, sep = "-")
+
+df$dtobito = dmy(df$dtobito)
+
+#monthday
+# Extract the month and year components from the character date
+month <- substr(df$dtobito, 6, 7)
+year <- substr(df$dtobito, 1, 4)
+
+#define patterns to search for
+my_patterns <- c('B342', 'U072',"COVID-19")
+
+#filter for rows where status column contains one of several strings
+new_df <- df %>%
+  filter(if_any(c(linhaa, linhab, linhac, linhad, linhaii),
+                ~ grepl(paste(my_patterns, collapse = '|'), .))) %>%
+  distinct()
+
+table(new_df$yearonly)
+
+#df <- df %>%
+#  filter(!if_any(c(linhaa, linhab, linhac, linhad, linhai, linhaii),
+#                 ~ grepl(paste(my_patterns, collapse = '|'), .))) %>%
+#  distinct()
+
+# Count the number of observations per month
+cases_per_month <- df %>% 
+  mutate(month = floor_date(dtobito, unit = "year")) %>%
+  group_by(month) %>%
+  summarize(cases = n())
+
+cases_per_month$pop = df1$brazil
+
+cases_per_month$pop = as.numeric(cases_per_month$pop)
+cases_per_month$cases = as.numeric(cases_per_month$cases)
+
+cases_per_month$asthma_inc = (cases_per_month$cases/cases_per_month$pop)*100000
+cases_per_month$year = c(2014:2021)
+cases_per_month$asthma_inc = round(cases_per_month$asthma_inc,2)
+
+df$esc_edit <- ifelse(df$esc2010 == "No schooling"|
+                        df$esc2010 == "1st to 4th grade"|
+                        df$esc2010 == "5th to 8th grade", "< 9 anos",
+                      ifelse(df$esc2010 == "Ignored","Ignorado","≥ 9 anos"))
+                        
+```
+
+```{r, warning=FALSE}
+
+grafico_princ <- ggplot(cases_per_month, aes(x = year, y = asthma_inc)) + 
+  geom_bar(stat = "identity", fill = "grey", color = "black")+
+  labs(y = "Mortes por 100.000 hab.", x = "Período", title = "") + 
+  theme_bw() +
+  theme(
+    plot.title = element_text(size = 12, face = "bold"),
+    axis.line = element_line(colour = "black"),
+    axis.title = element_text(size = 12, colour = "black", face = "bold"),
+    axis.text = element_text(colour = "black", size = 12),
+    legend.title = element_text(face = "bold", size = 12),
+    legend.text = element_text(size = 12),
+    panel.border = element_blank()
+  ) +
+  geom_line(size=1, lty=2) +
+  geom_point(size=2) +
+  geom_text(aes(label = asthma_inc, y = asthma_inc - 0.2), 
+           position = position_dodge(width = 0.9), 
+            color = "black", size = 4) +
+  scale_y_continuous(limits=c(0.7,1.4),oob = rescale_none)
+
+rateratio(cases_per_month$cases,cases_per_month$pop)
+
+grafico_princ 
+
+```
+
+```{r}
+# Criar uma coluna para armazenar o número de óbitos (ou qualquer valor relevante) para cada combinação de ano e lococor
+
+
+df_increg <- df %>%
+  filter(!(region == "Foreigne" | region == "Ignored")) %>%
+  group_by(yearonly, region) %>%
+  summarize(total_deaths = n()) %>%
+  as.data.frame()
+
+
+df_increg <- df_increg %>%
+  mutate(region = case_when(
+    region == "North" ~ "Norte",
+    region == "Northeast" ~ "Nordeste",
+    region == "Southeast" ~ "Sudeste",
+    region == "South" ~ "Sul",
+    region == "Midwest" ~ "Centro-oeste",
+    TRUE ~ region  # Mantém outros valores inalterados
+  ))
+
+pivot_data_region <- df1 %>% select(year,north,northest, southest, south, midwest) %>% 
+  pivot_longer(
+    cols = c(north,northest, southest, south, midwest),
+    names_to = "region",
+    values_to = "pop"
+  ) %>% as.data.frame()
+
+pivot_data_region <- pivot_data_region %>%
+  mutate(region = case_when(
+    region == "north" ~ "Norte",
+    region == "northest" ~ "Nordeste",
+    region == "southest" ~ "Sudeste",
+    region == "south" ~ "Sul",
+    region == "midwest" ~ "Centro-oeste",
+    TRUE ~ region  # Mantém outros valores inalterados
+  ))
+
+
+pivot_data_region <- pivot_data_region %>%
+  rename(yearonly = year)
+
+df_increg <- left_join(df_increg, pivot_data_region, by = c("yearonly", "region"))
+
+df_increg$inc = df_increg$total_deaths/df_increg$pop*100000
+
+resultado_aggregate <- aggregate(df_increg$inc, by = list(region = df_increg$region), FUN = mean)
+
+
+azul_palette <- c("#277da1","#f9c74f", "#f9844a", "#90be6d", "#f94144")
+
+g12 <- ggplot(df_increg, aes(x = yearonly, y = inc, group = region, color = region, fill=region)) +
+  geom_bar(stat="identity", position = "dodge", color="black")+
+  labs(y = "Mortes por 100.000 hab.", x = "Período", title = "") +
+  theme_minimal() + 
+  theme(legend.position = "bottom",
+    plot.title = element_text(size = 12, face = "bold"),
+    axis.line = element_line(colour = "black"),
+    axis.title = element_text(size = 12, colour = "black", face = "bold"),
+    axis.text = element_text(colour = "black", size = 12),
+    legend.title = element_text(face = "bold", size = 12),
+    legend.text = element_text(size = 12),
+    panel.border = element_blank())+
+  scale_fill_brewer(palette = "Greys",name = "")+
+  scale_x_continuous(breaks = 2014:2021)+
+  scale_y_continuous(expand = expansion(mult = 0))
+
+g12
+
+filtered_data <- df_increg %>% filter(region == "Nordeste")
+mean(df_increg$inc, na.rm=TRUE)
+
+df_increg_pivot <- df_increg %>%
+  pivot_wider(names_from = region,
+              id_cols = "yearonly",
+              values_from = c(total_deaths, pop)) 
+
+rateratio(df_increg_pivot$`total_deaths_Nordeste`,
+          df_increg_pivot$`pop_Nordeste`)
+
+```
+
+)
+
+```{r}
+# Criar uma coluna para armazenar o número de óbitos (ou qualquer valor relevante) para cada combinação de ano e lococor
+
+
+df_sexo <- df %>%
+  filter(!(sexo == "Ignored")) %>%
+  group_by(yearonly, sexo) %>%
+  summarize(total_deaths = n()) %>%
+  as.data.frame()
+
+
+pivot_data_sexo <- df1 %>% select(year,male,female) %>% 
+  pivot_longer(
+    cols = c(male,female),
+    names_to = "sexo",
+    values_to = "pop"
+  ) %>% as.data.frame()
+
+pivot_data_sexo <- pivot_data_sexo %>%
+  rename(yearonly = year)
+
+pivot_data_sexo <- pivot_data_sexo %>%
+  mutate(sexo = case_when(
+    sexo == "female" ~ "Feminino",
+    sexo == "male" ~ "Masculino",
+    TRUE ~ sexo  # Mantém outros valores inalterados
+  ))
+
+df_sexo <- df_sexo %>%
+  mutate(sexo = case_when(
+    sexo == "Female" ~ "Feminino",
+    sexo == "Male" ~ "Masculino",
+    TRUE ~ sexo  # Mantém outros valores inalterados
+  ))
+
+df_sexo <- left_join(df_sexo, pivot_data_sexo, by = c("yearonly", "sexo"))
+
+df_sexo$inc = df_sexo$total_deaths/df_sexo$pop*100000
+
+sex_pal = c("black","white")
+
+g13 <- ggplot(df_sexo, aes(x = yearonly, y = inc, group = sexo, color = sexo, fill=sexo)) +
+  geom_bar(stat="identity", position = "dodge", color="black")+# Aqui você pode ajustar o valor de size para tornar as linhas mais espessas
+  labs(y = "Mortes por 100.000 hab.", x = "Período", title = "") +
+  scale_fill_manual(name = "", values = c("Masculino" = "grey55", "Feminino" = "white")) +
+  theme_minimal() + 
+  theme(legend.position = "bottom")+
+   theme(legend.position = "bottom",
+    plot.title = element_text(size = 12, face = "bold"),
+    axis.line = element_line(colour = "black"),
+    axis.title = element_text(size = 12, colour = "black", face = "bold"),
+    axis.text = element_text(colour = "black", size = 12),
+    legend.title = element_text(face = "bold", size = 12),
+    legend.text = element_text(size = 12),
+    panel.border = element_blank())+
+  scale_y_continuous(expand = expansion(mult = 0))
+
+g13
+
+#alt prop
+df1 = df %>% filter(sexo=="Female"|sexo=="Male")
+df1$sexo = factor(df1$sexo)
+df1$sexo = droplevels(df1$sexo)
+g13.1 = ggplot(df1,aes(x = yearonly, fill=sexo)) +
+  geom_bar(color="black")+
+    labs(y = "Mortes por 100.000 hab.", x = "Período", title = "") +
+  scale_color_manual(name = "", values = sex_pal) +
+  theme_minimal() + 
+  theme(legend.position = "bottom")+
+   theme(legend.position = "bottom",
+    plot.title = element_text(size = 12, face = "bold"),
+    axis.line = element_line(colour = "black"),
+    axis.title = element_text(size = 12, colour = "black", face = "bold"),
+    axis.text = element_text(colour = "black", size = 12),
+    legend.title = element_text(face = "bold", size = 12),
+    legend.text = element_text(size = 12),
+    panel.border = element_blank())+
+  scale_fill_manual(values = c("grey", "grey34"), 
+                    labels = c("Feminino","Masculino"),
+                    name="")+
+  scale_x_continuous(breaks = 2014:2021)
+
+#chisq
+
+chisq.test(df1$sexo,df1$yearonly)
+
+summary_data <- df1 %>%
+  group_by(sexo) %>%
+  summarize(
+    min_inc = min(inc),
+    max_inc = max(inc),
+    avg_inc = mean(inc)
+  )
+
+table(df1$sexo,df1$yearonly)
+```
+
+```{r}
+# Criar uma coluna para armazenar o número de óbitos (ou qualquer valor relevante) para cada combinação de ano e lococor
+
+
+df_age <- df %>% 
+  group_by(yearonly, age_range) %>%
+  summarize(total_deaths = n()) %>% as.data.frame()
+
+pivot_data <- df1 %>% select(year,age_18,age_1859,age_60) %>% 
+  pivot_longer(
+    cols = c(age_18,age_1859,age_60),
+    names_to = "age_range",
+    values_to = "pop"
+  ) %>% as.data.frame()
+
+pivot_data <- pivot_data %>%
+  rename(yearonly = year)
+
+pivot_data <- pivot_data %>%
+  mutate(age_range = case_when(
+    age_range == "age_1859" ~ "18-59 anos",
+    age_range == "age_18" ~ "<18 anos",
+    age_range == "age_60" ~ "60≥ anos",
+    TRUE ~ age_range  # Mantém outros valores inalterados
+  ))
+
+df_age <- df_age %>%
+  mutate(age_range = case_when(
+    age_range == "18-59 years" ~ "18-59 anos",
+    age_range == "<18 years" ~ "<18 anos",
+    age_range == "60≥ years" ~ "60≥ anos",
+    TRUE ~ age_range  # Mantém outros valores inalterados
+  ))
+
+
+df_age <- left_join(pivot_data, df_age, by = c("yearonly", "age_range"))
+
+df_age$inc = df_age$total_deaths/df_age$pop*100000
+
+g11 <- ggplot(df_age, aes(x = yearonly, y = inc, 
+                           group = age_range,
+                          color=age_range,
+                          fill=age_range)) +
+   geom_bar(stat="identity", position = "dodge", color="black")+
+ # Aqui você pode ajustar o valor de size para tornar as linhas mais espessas
+  labs(y = "Mortes por 100.000 hab.", x = "Período", title = "") +
+  theme_minimal() + 
+  theme(legend.position = "bottom")+
+   theme(legend.position = "bottom",
+    plot.title = element_text(size = 12, face = "bold"),
+    axis.line = element_line(colour = "black"),
+    axis.title = element_text(size = 12, colour = "black", face = "bold"),
+    axis.text = element_text(colour = "black", size = 12),
+    legend.title = element_text(face = "bold", size = 12),
+    legend.text = element_text(size = 12),
+    panel.border = element_blank())+
+  scale_fill_brewer(palette = "Greys", name = "") +
+  scale_y_continuous(expand = expansion(mult = 0))
+
+g11
+
+###########
+df$age_range = factor(df$age_range)
+df2 = df %>%  filter(age_range=="<18 years"|age_range=="18-59 years"|age_range=="60≥ years")
+
+
+g11.1 = ggplot(df2,aes(fill=age_range,x=yearonly)) + 
+    geom_bar()+
+      labs(y = "Mortes por 100.000 hab.", x = "Período", title = "") +
+  theme_minimal() + 
+  theme(legend.position = "bottom")+
+   theme(legend.position = "bottom",
+    plot.title = element_text(size = 12, face = "bold"),
+    axis.line = element_line(colour = "black"),
+    axis.title = element_text(size = 12, colour = "black", face = "bold"),
+    axis.text = element_text(colour = "black", size = 12),
+    legend.title = element_text(face = "bold", size = 12),
+    legend.text = element_text(size = 12),
+    panel.border = element_blank())+
+  scale_fill_manual(values = c("grey", "grey44", "grey5"), 
+                    labels = c("< 18 anos","18 - 59 anos","≥ 60 anos"),
+                    name="")+
+  scale_x_continuous(breaks = 2014:2021)
+
+resultados <- df2 %>%
+  group_by(yearonly, age_range) %>%
+  summarise(n_casos = n()) %>%
+  ungroup() %>%
+  group_by(yearonly) %>%
+  mutate(proporcao = n_casos / sum(n_casos) * 100)
+
+media_geral <- resultados %>%
+  group_by(age_range) %>%
+  summarise(media_geral = mean(proporcao))
+
+print(resultados)
+print(media_geral)
+
+```
+
+```{r}
+# Criar uma coluna para armazenar o número de óbitos (ou qualquer valor relevante) para cada combinação de ano e lococor
+df_summary = df %>% filter(!(lococor=="Ignored"))
+
+contagem_casos <- df_summary %>%
+  group_by(yearonly, lococor) %>%
+  summarize(count = n()) %>%
+  pivot_wider(names_from = lococor, values_from = count, names_prefix = "count_") %>%
+  ungroup()  
+
+
+df_summary <- df_summary %>%
+  mutate(lococor = case_when(
+    lococor == "Ignored or others" ~ "Ignorado/Outros lugares",
+    lococor == "Home" ~ "Residência",
+    lococor == "Hospital" ~ "Hospital",
+    lococor == "Other health establishment" ~ "Unidade não-hospitalar",
+    lococor == "Public way" ~ "Via pública",
+    TRUE ~ lococor  # Mantém outros valores inalterados
+  ))
+
+df_summary <- df_summary %>%
+  mutate(lococor = case_when(
+    lococor == "Other" ~ "Outros lugares",
+    TRUE ~ lococor  # Mantém outros valores inalterados
+  ))
+
+df_summary$lococor <- factor(df_summary$lococor, levels = c("Outros lugares", "Hospital", "Residência", "Unidade não-hospitalar", "Via pública"))
+
+# Criar o gráfico de área
+grafico_area <- ggplot(df_summary, aes(x = yearonly, fill = lococor)) +
+  geom_bar(position = "fill", color="black", width = 0.5) +
+  scale_y_continuous(labels = scales::percent)+
+  labs(y = "Proporção de mortes", x = "Período", title = "", fill = "") +
+  scale_fill_brewer(palette = "Greys") +
+  theme_minimal() + 
+  theme(legend.position = "bottom",
+  plot.title = element_text(size = 12, face = "bold"),
+  axis.line = element_line(colour = "black"),
+  axis.title = element_text(size = 12, colour = "black", face = "bold"),
+  axis.text = element_text(colour = "black", size = 12),
+  legend.title = element_text(face = "bold", size = 12),
+  legend.text = element_text(size = 12),
+  panel.border = element_blank())
+
+grafico_area
+
+
+
+####alt
+
+summary_data2 <- df_summary %>% filter(!(region=="Foreigne"|region=="Ignored")) 
+
+grafico_area1 <-
+  ggplot(summary_data2, aes(x = region, fill = lococor)) +
+  geom_bar(position = "fill", color="black", width = 0.7) +
+  labs(y = "Proporção de mortes", x = "", title = "a. Região", fill = "") +
+  scale_fill_brewer(palette = "Greys") +
+  theme_minimal() + 
+  theme(legend.position = "bottom",
+  plot.title = element_text(size = 12, face = "bold",
+                            hjust = 0.5),
+  axis.line = element_line(colour = "black"),
+  axis.title = element_text(size = 12, colour = "black", face = "bold"),
+  axis.text = element_text(colour = "black", size = 12),
+  legend.title = element_text(face = "bold", size = 12),
+  legend.text = element_text(size = 12),
+  panel.border = element_blank())+
+  scale_y_continuous(expand = expansion(mult = 0))+
+  scale_x_discrete(labels=c("Midwest" = "Centro-oeste", "North" = "Norte",
+                              "Northeast" = "Nordeste","South" = "Sul", "Southeast" = "Sudeste"))
+
+df_summary1 = df_summary %>% 
+  filter(!(sexo=="Ignored")) 
+
+grafico_area2 <-
+  ggplot(df_summary1, aes(x = sexo, fill = lococor)) +
+  geom_bar(position = "fill", color="black", width = 0.4) +
+  labs(title = "b. Sexo",y = "Proporção de mortes", x = "", fill = "") +
+  scale_fill_brewer(palette = "Greys") +
+  theme_minimal() + 
+  theme(legend.position = "bottom",
+  plot.title = element_text(size = 12, face = "bold",hjust = 0.5),
+  axis.line = element_line(colour = "black"),
+  axis.title = element_text(size = 12, colour = "black", face = "bold"),
+  axis.text = element_text(colour = "black", size = 12),
+  legend.title = element_text(face = "bold", size = 12),
+  legend.text = element_text(size = 12),
+  panel.border = element_blank(),
+  plot.margin = unit(c(0, 0.8, 0, 0.8),
+                                "inches"))+
+  scale_y_continuous(expand = expansion(mult = 0))+
+  scale_x_discrete(labels=c("Female" = "Feminino", "Male" = "Masculino"))
+
+
+df_summary2 = df_summary %>% filter(age_range=="<18 years"|age_range=="18-59 years"|age_range=="60≥ years") %>% droplevels()
+
+grafico_area3 <-
+  ggplot(df_summary2, aes(x = age_range, fill = lococor)) +
+  geom_bar(position = "fill", color="black", width = 0.4) +
+  labs(title = "c. Faixa etária",y = "Proporção de mortes", x = "", fill = "") +
+  scale_fill_brewer(palette = "Greys") +
+  theme_minimal() + 
+  theme(legend.position = "bottom",
+  plot.title = element_text(size = 12, face = "bold",
+                            hjust = 0.5),
+  axis.line = element_line(colour = "black"),
+  axis.title = element_text(size = 12, colour = "black", face = "bold"),
+  axis.text = element_text(colour = "black", size = 12),
+  legend.title = element_text(face = "bold", size = 12),
+  legend.text = element_text(size = 12),
+  panel.border = element_blank(),
+  plot.margin = unit(c(0, 0.8, 0, 0.8),
+                                "inches"))+
+  scale_y_continuous(expand = expansion(mult = 0))+
+  scale_x_discrete(labels=c("< 18 years" = "<18 anos", "18-59 years" = "18-59 anos", "60≥ years"  = "60≥ anos"))
+
+df_summary3 = df_summary2 %>%
+  filter(esc_edit=="< 9 anos"|
+           esc_edit=="≥ 9 anos") %>% droplevels()
+
+grafico_area4 <-
+  ggplot(df_summary3, aes(x = esc_edit, fill = lococor)) +
+  geom_bar(position = "fill", color="black", width = 0.4) +
+  labs(title = "d. Anos de estudo", y = "Proporção de mortes", x = "", fill = "") +
+  scale_fill_brewer(palette = "Greys") +
+  theme_minimal() + 
+  theme(legend.position = "bottom",
+  plot.title = element_text(size = 12, face = "bold",
+                            hjust= 0.5),
+  axis.line = element_line(colour = "black"),
+  axis.title = element_text(size = 12, colour = "black", face = "bold"),
+  axis.text = element_text(colour = "black", size = 12),
+  legend.title = element_text(face = "bold", size = 12),
+  legend.text = element_text(size = 12),
+  panel.border = element_blank(),
+  plot.margin = unit(c(0, 0.8, 0, 0.8),
+                                "inches"))+
+  scale_y_continuous(expand = expansion(mult = 0))
+
+ggarrange(grafico_area1, grafico_area2, grafico_area3, grafico_area4, ncol=2, nrow=2, common.legend = TRUE, legend="bottom")
+
+
+chisq.test(df_summary$yearonly,df_summary$lococor)
+chisq.test(df_summary$region,df_summary$lococor)
+
+ggbarstats(df_summary,lococor,yearonly)
+MannKendall(contagem_casos$count_Residência)
+ggbarstats(summary_data2,region,lococor)
+ggbarstats(df_summary1,sexo,lococor)
+ggbarstats(summary_data2,age_range,lococor)
+ggbarstats(df_summary3,esc_edit,lococor)
+
+
+```
+
+```{r}
+# Criar uma coluna para armazenar o número de óbitos (ou qualquer valor relevante) para cada combinação de ano e lococor
+
+df_north <- df %>% filter(region == "North") %>% 
+  group_by(yearonly, lococor) %>%
+  summarize(total_deaths = n()) %>% as.data.frame()
+
+sums_north <- df_north %>%
+  filter(lococor %in% c("Ignored", "Other")) %>%
+  group_by(yearonly) %>%
+  summarise(total_ignored_other = sum(total_deaths))
+
+new_north <- data.frame(
+  yearonly = sums_north$yearonly,
+  lococor = "Ignored or others",
+  total_deaths = sums_north$total_ignored_other
+)
+
+new_north = rbind(new_north,df_north)
+
+filtered_north <- new_north %>%
+  filter(!(lococor %in% c("Ignored", "Other")))
+
+df_north <- filtered_north %>%
+  group_by(yearonly) %>%
+  mutate(prop_deaths = ((total_deaths / sum(total_deaths))*100)) 
+
+df_north <- df_north %>%
+  mutate(lococor = case_when(
+    lococor == "Ignored or others" ~ "Ignorado/Outros lugares",
+    lococor == "Home" ~ "Residência",
+    lococor == "Hospital" ~ "Hospital",
+    lococor == "Other health establishment" ~ "Outros estabelecimentos de saúde",
+    lococor == "Public way" ~ "Via pública",
+    TRUE ~ lococor  # Mantém outros valores inalterados
+  ))
+
+
+#############
+
+df_northeast <- df %>% filter(region == "Northeast") %>% 
+  group_by(yearonly, lococor) %>%
+  summarize(total_deaths = n()) %>% as.data.frame()
+
+sums_northeast <- df_northeast %>%
+  filter(lococor %in% c("Ignored", "Other")) %>%
+  group_by(yearonly) %>%
+  summarise(total_ignored_other = sum(total_deaths))
+
+new_northeast <- data.frame(
+  yearonly = sums_northeast$yearonly,
+  lococor = "Ignored or others",
+  total_deaths = sums_northeast$total_ignored_other
+)
+
+new_northeast = rbind(new_northeast,df_northeast)
+
+filtered_northeast <- new_northeast %>%
+  filter(!(lococor %in% c("Ignored", "Other")))
+
+df_northeast <- filtered_northeast %>%
+  group_by(yearonly) %>%
+  mutate(prop_deaths = ((total_deaths / sum(total_deaths))*100)) 
+
+df_northeast <- df_northeast %>%
+  mutate(lococor = case_when(
+    lococor == "Ignored or others" ~ "Ignorado/Outros lugares",
+    lococor == "Home" ~ "Residência",
+    lococor == "Hospital" ~ "Hospital",
+    lococor == "Other health establishment" ~ "Outros estabelecimentos de saúde",
+    lococor == "Public way" ~ "Via pública",
+    TRUE ~ lococor  # Mantém outros valores inalterados
+  ))
+
+#######
+
+df_southeast <- df %>% filter(region == "Southeast") %>% 
+  group_by(yearonly, lococor) %>%
+  summarize(total_deaths = n()) %>% as.data.frame()
+
+sums_southeast <- df_southeast %>%
+  filter(lococor %in% c("Ignored", "Other")) %>%
+  group_by(yearonly) %>%
+  summarise(total_ignored_other = sum(total_deaths))
+
+new_southeast <- data.frame(
+  yearonly = sums_southeast$yearonly,
+  lococor = "Ignored or others",
+  total_deaths = sums_southeast$total_ignored_other
+)
+
+new_southeast = rbind(new_southeast,df_southeast)
+
+filtered_southeast <- new_southeast %>%
+  filter(!(lococor %in% c("Ignored", "Other")))
+
+df_southeast <- filtered_southeast %>%
+  group_by(yearonly) %>%
+  mutate(prop_deaths = ((total_deaths / sum(total_deaths))*100)) 
+
+df_southeast <- df_southeast %>%
+  mutate(lococor = case_when(
+    lococor == "Ignored or others" ~ "Ignorado/Outros lugares",
+    lococor == "Home" ~ "Residência",
+    lococor == "Hospital" ~ "Hospital",
+    lococor == "Other health establishment" ~ "Outros estabelecimentos de saúde",
+    lococor == "Public way" ~ "Via pública",
+    TRUE ~ lococor  # Mantém outros valores inalterados
+  ))
+
+#############
+
+df_south <- df %>% filter(region == "South") %>% 
+  group_by(yearonly, lococor) %>%
+  summarize(total_deaths = n()) %>% as.data.frame()
+
+sums_south <- df_south %>%
+  filter(lococor %in% c("Ignored", "Other")) %>%
+  group_by(yearonly) %>%
+  summarise(total_ignored_other = sum(total_deaths))
+
+new_south <- data.frame(
+  yearonly = sums_south$yearonly,
+  lococor = "Ignored or others",
+  total_deaths = sums_south$total_ignored_other
+)
+
+new_south = rbind(new_south,df_south)
+
+filtered_south <- new_south %>%
+  filter(!(lococor %in% c("Ignored", "Other")))
+
+df_south <- filtered_south %>%
+  group_by(yearonly) %>%
+  mutate(prop_deaths = ((total_deaths / sum(total_deaths))*100)) 
+
+df_south <- df_south %>%
+  mutate(lococor = case_when(
+    lococor == "Ignored or others" ~ "Ignorado/Outros lugares",
+    lococor == "Home" ~ "Residência",
+    lococor == "Hospital" ~ "Hospital",
+    lococor == "Other health establishment" ~ "Outros estabelecimentos de saúde",
+    lococor == "Public way" ~ "Via pública",
+    TRUE ~ lococor  # Mantém outros valores inalterados
+  ))
+
+#####
+
+df_midwest <- df %>% filter(region == "Midwest") %>% 
+  group_by(yearonly, lococor) %>%
+  summarize(total_deaths = n()) %>% as.data.frame()
+
+sums_midwest <- df_midwest %>%
+  filter(lococor %in% c("Ignored", "Other")) %>%
+  group_by(yearonly) %>%
+  summarise(total_ignored_other = sum(total_deaths))
+
+new_midwest <- data.frame(
+  yearonly = sums_midwest$yearonly,
+  lococor = "Ignored or others",
+  total_deaths = sums_midwest$total_ignored_other
+)
+
+new_midwest = rbind(new_midwest,df_midwest)
+
+filtered_midwest <- new_midwest %>%
+  filter(!(lococor %in% c("Ignored", "Other")))
+
+df_midwest <- filtered_midwest %>%
+  group_by(yearonly) %>%
+  mutate(prop_deaths = ((total_deaths / sum(total_deaths))*100)) 
+
+df_midwest <- df_midwest %>%
+  mutate(lococor = case_when(
+    lococor == "Ignored or others" ~ "Ignorado/Outros lugares",
+    lococor == "Home" ~ "Residência",
+    lococor == "Hospital" ~ "Hospital",
+    lococor == "Other health establishment" ~ "Outros estabelecimentos de saúde",
+    lococor == "Public way" ~ "Via pública",
+    TRUE ~ lococor  # Mantém outros valores inalterados
+  ))
+
+# Criar o gráfico de área
+g1 <- ggplot(df_north, aes(x = yearonly, y = prop_deaths, fill = lococor)) +
+  geom_area(position = "fill") +
+  labs(y = "Proporção de mortes", x = "", title = "Norte") +
+  scale_fill_manual(name = "", values = azul_palette) +
+  theme_minimal()+ 
+  theme(legend.position = "bottom",
+  plot.title = element_text(size = 12, face = "bold", hjust = 0.5),
+  axis.line = element_line(colour = "black"),
+  axis.title = element_text(size = 12, colour = "black", face = "bold"),
+  axis.text = element_text(colour = "black", size = 12),
+  legend.title = element_text(face = "bold", size = 12),
+  legend.text = element_text(size = 12),
+  panel.border = element_blank())
+
+# Criar o gráfico de área
+g2 <- ggplot(df_northeast, aes(x = yearonly, y = prop_deaths, fill = lococor)) +
+  geom_area(position = "fill") +
+  labs(y = "", x = "", title = "Nordeste") +
+  scale_fill_manual(name = "", values = azul_palette) +
+  theme_minimal()+ 
+  theme(legend.position = "bottom",
+  plot.title = element_text(size = 12, face = "bold", hjust = 0.5),
+  axis.line = element_line(colour = "black"),
+  axis.title = element_text(size = 12, colour = "black", face = "bold", hjust = 0.5),
+  axis.text = element_text(colour = "black", size = 12),
+  legend.title = element_text(face = "bold", size = 12),
+  legend.text = element_text(size = 12),
+  panel.border = element_blank())
+
+# Criar o gráfico de área
+g3 <- ggplot(df_southeast, aes(x = yearonly, y = prop_deaths, fill = lococor)) +
+  geom_area(position = "fill") +
+  labs(y = "Proporção de mortes", x = "", title = "Sudeste") +
+  scale_fill_manual(name = "", values = azul_palette) +
+  theme_minimal()+ 
+  theme(legend.position = "bottom",
+  plot.title = element_text(size = 12, face = "bold", hjust = 0.5),
+  axis.line = element_line(colour = "black"),
+  axis.title = element_text(size = 12, colour = "black", face = "bold"),
+  axis.text = element_text(colour = "black", size = 12),
+  legend.title = element_text(face = "bold", size = 12),
+  legend.text = element_text(size = 12),
+  panel.border = element_blank())
+
+# Criar o gráfico de área
+g4 <- ggplot(df_south, aes(x = yearonly, y = prop_deaths, fill = lococor)) +
+  geom_area(position = "fill") +
+  labs(y = "", x = "Período", title = "Sul") +
+  scale_fill_manual(name = "", values = azul_palette) +
+  theme_minimal()+ 
+  theme(legend.position = "bottom",
+  plot.title = element_text(size = 12, face = "bold", hjust = 0.5),
+  axis.line = element_line(colour = "black"),
+  axis.title = element_text(size = 12, colour = "black", face = "bold"),
+  axis.text = element_text(colour = "black", size = 12),
+  legend.title = element_text(face = "bold", size = 12),
+  legend.text = element_text(size = 12),
+  panel.border = element_blank())
+
+# Criar o gráfico de área
+g5 = ggplot(df_midwest,aes(yearonly,prop_deaths,fill=lococor))+geom_area(position = "fill") +
+  labs(y = "Proporção de mortes", x = "Período", title = "Centro-oeste") +
+  scale_fill_manual(name = "", values = azul_palette) +
+  theme_minimal()+ 
+  theme(legend.position = "bottom",
+  plot.title = element_text(size = 12, face = "bold", hjust = 0.5),
+  axis.line = element_line(colour = "black"),
+  axis.title = element_text(size = 12, colour = "black", face = "bold"),
+  axis.text = element_text(colour = "black", size = 12),
+  legend.title = element_text(face = "bold", size = 12),
+  legend.text = element_text(size = 12),
+  panel.border = element_blank())
+
+ggarrange(g1, g2, g3, g4, g5, ncol=2, nrow=3, common.legend = TRUE, legend="bottom")
+
+df_north$region <- "Norte"
+df_northeast$region <- "Nordeste"
+df_southeast$region <- "Sudeste"
+df_south$region <- "Sul"
+df_midwest$region <- "Centro-Oeste"
+
+combined_df <- bind_rows(df_north, df_northeast, df_southeast, df_south, df_midwest)
+
+
+summary_data3 <- combined_df %>%
+  group_by(lococor,region) %>%
+  summarize(
+   avg_inc = mean(prop_deaths)
+  )
+```
+
+```{r, echo=FALSE, warning=FALSE, message=FALSE}
+# Criar uma coluna para armazenar o número de óbitos (ou qualquer valor relevante) para cada combinação de ano e lococor
+
+
+df_age18 <- df %>% filter(age_range== "<18 years") %>% 
+  group_by(yearonly, lococor) %>%
+  summarize(total_deaths = n()) %>% as.data.frame()
+
+sums_age18<- df_age18 %>%
+  filter(lococor %in% c("Ignored", "Other")) %>%
+  group_by(yearonly) %>%
+  summarise(total_ignored_other = sum(total_deaths))
+
+new_age18 <- data.frame(
+  yearonly = sums_age18$yearonly,
+  lococor = "Ignored or others",
+  total_deaths = sums_age18$total_ignored_other
+)
+
+new_age18 = rbind(new_age18,df_age18)
+
+filtered_age18 <- new_age18 %>%
+  filter(!(lococor %in% c("Ignored", "Other")))
+
+df_age18 <- filtered_age18 %>%
+  group_by(yearonly) %>%
+  mutate(prop_deaths = ((total_deaths / sum(total_deaths))*100)) 
+
+df_age18 <- df_age18 %>%
+  mutate(lococor = case_when(
+    lococor == "Ignored or others" ~ "Ignorado/Outros lugares",
+    lococor == "Home" ~ "Residência",
+    lococor == "Hospital" ~ "Hospital",
+    lococor == "Other health establishment" ~ "Outros estabelecimentos de saúde",
+    lococor == "Public way" ~ "Via pública",
+    TRUE ~ lococor  # Mantém outros valores inalterados
+  ))
+
+####################3
+df_age1859 <- df %>% filter(age_range== "18-59 years") %>% 
+  group_by(yearonly, lococor) %>%
+  summarize(total_deaths = n()) %>% as.data.frame()
+
+sums_age1859 <- df_age1859 %>%
+  filter(lococor %in% c("Ignored", "Other")) %>%
+  group_by(yearonly) %>%
+  summarise(total_ignored_other = sum(total_deaths))
+
+new_age1859 <- data.frame(
+  yearonly = sums_age1859$yearonly,
+  lococor = "Ignored or others",
+  total_deaths = sums_age1859$total_ignored_other
+)
+
+new_age1859 = rbind(new_age1859,df_age1859)
+
+filtered_age1859 <- new_age1859 %>%
+  filter(!(lococor %in% c("Ignored", "Other")))
+
+df_age1859 <- filtered_age1859 %>%
+  group_by(yearonly) %>%
+  mutate(prop_deaths = ((total_deaths / sum(total_deaths))*100)) 
+
+df_age1859 <- df_age1859 %>%
+  mutate(lococor = case_when(
+    lococor == "Ignored or others" ~ "Ignorado/Outros lugares",
+    lococor == "Home" ~ "Residência",
+    lococor == "Hospital" ~ "Hospital",
+    lococor == "Other health establishment" ~ "Outros estabelecimentos de saúde",
+    lococor == "Public way" ~ "Via pública",
+    TRUE ~ lococor  # Mantém outros valores inalterados
+  ))
+
+############
+df_age60 <- df %>% filter(age_range== "60≥ years") %>% 
+  group_by(yearonly, lococor) %>%
+  summarize(total_deaths = n()) %>% as.data.frame()
+
+sums_age60 <- df_age60 %>%
+  filter(lococor %in% c("Ignored", "Other")) %>%
+  group_by(yearonly) %>%
+  summarise(total_ignored_other = sum(total_deaths))
+
+new_age60 <- data.frame(
+  yearonly = sums_age60$yearonly,
+  lococor = "Ignored or others",
+  total_deaths = sums_age60$total_ignored_other
+)
+
+new_age60 = rbind(new_age60,df_age60)
+
+filtered_age60 <- new_age60 %>%
+  filter(!(lococor %in% c("Ignored", "Other")))
+
+df_age60 <- filtered_age60 %>%
+  group_by(yearonly) %>%
+  mutate(prop_deaths = ((total_deaths / sum(total_deaths))*100)) 
+
+df_age60 <- df_age60 %>%
+  mutate(lococor = case_when(
+    lococor == "Ignored or others" ~ "Ignorado/Outros lugares",
+    lococor == "Home" ~ "Residência",
+    lococor == "Hospital" ~ "Hospital",
+    lococor == "Other health establishment" ~ "Outros estabelecimentos de saúde",
+    lococor == "Public way" ~ "Via pública",
+    TRUE ~ lococor  # Mantém outros valores inalterados
+  ))
+
+# Create the ggplot objects
+g10 <- ggplot(df_age18, aes(x = yearonly, y = prop_deaths, fill = lococor)) +
+  geom_area(position="fill") +
+  labs(y = "Proporção de mortes", x = "Período", title = "< 18 anos") +
+  scale_fill_manual(name = "", values = azul_palette) +
+  theme_minimal() +
+  theme(legend.position = "bottom",
+  plot.title = element_text(size = 12, face = "bold", hjust = 0.5),
+  axis.line = element_line(colour = "black"),
+  axis.title = element_text(size = 12, colour = "black", face = "bold"),
+  axis.text = element_text(colour = "black", size = 12),
+  legend.title = element_text(face = "bold", size = 12),
+  legend.text = element_text(size = 12),
+  panel.border = element_blank())
+
+g20 <- ggplot(df_age1859, aes(x = yearonly, y = prop_deaths, fill = lococor)) +
+  geom_area(position = "fill") +
+  labs(y = "Proporção de mortes", x = "Período", title = "18 - 59 anos") +
+  scale_fill_manual(name = "", values = azul_palette) +
+  theme_minimal() +
+  theme(legend.position = "bottom",
+  plot.title = element_text(size = 12, face = "bold", hjust = 0.5),
+  axis.line = element_line(colour = "black"),
+  axis.title = element_text(size = 12, colour = "black", face = "bold"),
+  axis.text = element_text(colour = "black", size = 12),
+  legend.title = element_text(face = "bold", size = 12),
+  legend.text = element_text(size = 12),
+  panel.border = element_blank())
+
+g30 <- ggplot(df_age60, aes(x = yearonly, y = prop_deaths, fill = lococor)) +
+  geom_area(position = "fill") +
+  labs(y = "Proporção de mortes", x = "Período", title = "≥ 60 anos") +
+  scale_fill_manual(name = "", values = azul_palette) +
+  theme_minimal() +
+  theme(legend.position = "bottom",
+  plot.title = element_text(size = 12, face = "bold", hjust = 0.5),
+  axis.line = element_line(colour = "black"),
+  axis.title = element_text(size = 12, colour = "black", face = "bold"),
+  axis.text = element_text(colour = "black", size = 12),
+  legend.title = element_text(face = "bold", size = 12),
+  legend.text = element_text(size = 12),
+  panel.border = element_blank())
+
+
+ggarrange(g10, g20, g30, ncol=3, nrow=1, common.legend = TRUE, legend="bottom")
+
+
+df_age18$age <- "< 18 years"
+df_age1859$age <- "18-59 years"
+df_age60$age <- "60≥ years"
+
+
+combined_df2 <- bind_rows(df_age18, df_age1859, df_age60)
+
+
+summary_data4 <- combined_df2 %>%
+  group_by(lococor,age) %>%
+  summarize(
+   avg_inc = mean(prop_deaths)
+  )
+```
+
+```{r}
+t2=glm(cases_per_month$asthma_inc~cases_per_month$year)
+confint(t2)
+
+library(tidyverse)
+
+result <- pivot_wider(df_increg, 
+                      names_from = region, 
+                      values_from = c(total_deaths, 
+                                      pop, 
+                                      inc))
+
+t3=glm(result$inc_Sul~result$yearonly)
+confint(t3)
+t4=glm(result$inc_Nordeste~result$yearonly)
+confint(t4)
+
+result_age <- pivot_wider(df_age, 
+                      names_from = age_range, 
+                      values_from = c(total_deaths, 
+                                      pop, 
+                                      inc))
+
+t5=glm(result_age$`inc_<18 anos`~result_age$yearonly)
+confint(t5)
+t6=glm(result_age$`inc_18-59 anos`~result_age$yearonly)
+confint(t6)
+t7=glm(result_age$`inc_60≥ anos`~result_age$yearonly)
+confint(t7)
+
+result_sex <- pivot_wider(df_sexo, 
+                      names_from = sexo, 
+                      values_from = c(total_deaths, 
+                                      pop, 
+                                      inc))
+
+t8=glm(result_sex$inc_Feminino~result_sex$yearonly)
+confint(t8)
+t9=glm(result_sex$inc_Masculino~result_sex$yearonly)
+confint(t9)
+
+summary(t8)
+summary(t9)
+
+table(df$esc_edit,df$yearonly)
+
+```
