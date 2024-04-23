@@ -1,0 +1,608 @@
+---
+title: "Asthma"
+author: "Marcos Antunes"
+format: html
+editor: visual
+---
+
+```{r, warning=FALSE, message=FALSE}
+pacman::p_load(lubridate,gtsummary,dplyr,markdown,nortest,janitor,ggplot2,ggpubr,tidyverse,readxl,ggstatsplot,lattice,scalesm,RColorBrewer,epitools, scales)
+```
+
+Data treatment
+
+```{r}
+df = read.csv("df_2021.csv", sep = ",") %>% clean_names() #Data from script 1
+df1 = read_xlsx("populacao_ano.xlsx") #Data from IBGE
+
+# Create a named vector of state abbreviations and their corresponding regions
+regions <- c("RO" = "North", "AC" = "North", "AM" = "North", "RR" = "North", "PA" = "North", "AP" = "North", "TO" = "North", "AL" = "Northeast",
+             "MA" = "Northeast", "PI" = "Northeast", "CE" = "Northeast", "RN" = "Northeast", "PB" = "Northeast", 
+             "PE" = "Northeast", "SE" = "Northeast",
+             "BA" = "Northeast", "MG" = "Southeast", "ES" = "Southeast", 
+             "RJ" = "Southeast",  "SP" =  "Southeast",
+             "PR" =  "South",  "SC" =  "South",  "RS" =  "South",
+             "MS" =  "Midwest",  "MT" =  "Midwest",  "GO" =  "Midwest",  "DF" =  "Midwest", "Ignored" = "Ignored", "Foreigne"="Foreigne")
+
+# Add a new column to the data frame that specifies the region based on the state abbreviation
+df$region <- regions[df$natural_cond]
+
+# Create a new column that specifies the age range based on the values in the age column
+df$age_range <- ifelse(df$idade_quantidade < 18, "<18 years", ifelse(df$idade_quantidade >= 60, "60≥ years", "18-59 years"))
+
+df$yearonly <- substr(df$dtobito, nchar(df$dtobito)-3, nchar(df$dtobito))
+df$yearonly = as.numeric(df$yearonly)
+
+
+df$dtobito <- ifelse(nchar(df$dtobito) == 7, paste0("0", df$dtobito), df$dtobito)
+df$dtnasc <- ifelse(nchar(df$dtnasc) == 7, paste0("0", df$dtnasc), df$dtnasc)
+
+# Extract the day, month, and year components from the character date
+day <- substr(df$dtobito, 1, 2)
+month <- substr(df$dtobito, 3, 4)
+year <- substr(df$dtobito, 5, 8)
+
+# Combine the day, month, and year components with dashes between them
+df$dtobito <- paste(day, month, year, sep = "-")
+
+# Extract the day, month, and year components from the character date
+day1 <- substr(df$dtnasc, 1, 2)
+month2 <- substr(df$dtnasc, 3, 4)
+year3 <- substr(df$dtnasc, 5, 8)
+
+# Combine the day, month, and year components with dashes between them
+df$dtobito <- paste(day, month, year, sep = "-")
+
+df$dtnasc <- paste(day1, month2, year3, sep = "-")
+
+df$dtobito = dmy(df$dtobito)
+df$dtnasc = dmy(df$dtnasc)
+
+df$idade_quantidade <- as.numeric(difftime(df$dtobito, df$dtnasc, units = "days")/365.25)
+
+df = df %>% filter(idade_quantidade>6)
+
+
+# Extract the month and year components from the character date
+month <- substr(df$dtobito, 6, 7)
+year <- substr(df$dtobito, 1, 4)
+
+#Define patterns to search for
+my_patterns <- c('B342', 'U072',"COVID-19")
+
+#Filter for rows where status column contains one of several strings
+df <- df %>%
+  filter(!if_any(c(linhaa, linhab, linhac, linhad, linhaii),
+                ~ grepl(paste(my_patterns, collapse = '|'), .))) %>%
+  distinct()
+
+###Summarize cases per year
+cases_per_year <- df %>% 
+  mutate(month = floor_date(dtobito, unit = "year")) %>%
+  group_by(month) %>%
+  summarize(cases = n())
+
+cases_per_year$pop = df1$brazil
+
+cases_per_year$pop = as.numeric(cases_per_year$pop)
+cases_per_year$cases = as.numeric(cases_per_year$cases)
+
+cases_per_year$asthma_inc = (cases_per_year$cases/cases_per_year$pop)*100000
+cases_per_year$year = c(2014:2021)
+cases_per_year$asthma_inc = round(cases_per_year$asthma_inc,2)
+
+df$esc_edit <- ifelse(df$esc2010 == "No schooling"|
+                        df$esc2010 == "1st to 4th grade"|
+                        df$esc2010 == "5th to 8th grade", "< 9 anos",
+                      ifelse(df$esc2010 == "Ignored","Ignorado","≥ 9 anos"))
+                        
+```
+
+First chart
+
+```{r, warning=FALSE}
+
+grafico_princ <- ggplot(cases_per_year, aes(x = year, y = asthma_inc)) + 
+  geom_bar(stat = "identity", fill = "grey", color = "black") +
+  labs(y = "Deaths per 100.000 inhab.", x = "Period", title = "") + 
+  theme_bw() +
+  theme(
+    plot.title = element_text(size = 12, face = "bold"),
+    axis.line = element_line(colour = "black"),
+    axis.title = element_text(size = 12, colour = "black", face = "bold"),
+    axis.text = element_text(colour = "black", size = 12),
+    legend.title = element_text(face = "bold", size = 12),
+    legend.text = element_text(size = 12),
+    panel.border = element_blank()
+  ) +
+  geom_line(size = 1, lty = 2) +
+  geom_point(size = 2) +
+  geom_text(aes(label = asthma_inc, y = asthma_inc - 0.2), 
+            position = position_dodge(width = 0.9), 
+            color = "black", size = 4) +
+  scale_y_continuous(limits = c(0.7, 1.6), oob = rescale_none) +
+  scale_x_continuous(breaks = unique(cases_per_year$year))
+
+
+#GLM
+model_1 = glm(asthma_inc ~ year, data=cases_per_year)
+confint(model_1)
+```
+
+Second chart
+
+```{r}
+#Regions chart
+
+
+df_increg <- df %>%
+  filter(!(region == "Foreigne" | region == "Ignored")) %>%
+  group_by(yearonly, region) %>%
+  summarize(total_deaths = n()) %>%
+  as.data.frame()
+
+
+pivot_data_region <- df1 %>% select(year,north,northest, southest, south, midwest) %>% 
+  pivot_longer(
+    cols = c(north,northest, southest, south, midwest),
+    names_to = "region",
+    values_to = "pop"
+  ) %>% as.data.frame()
+
+pivot_data_region <- pivot_data_region %>%
+  mutate(region = case_when(
+    region == "north" ~ "North",
+    region == "northest" ~ "Northeast",
+    region == "southest" ~ "Southeast",
+    region == "south" ~ "South",
+    region == "midwest" ~ "Midwest",
+    TRUE ~ region  # Mantém outros valores inalterados
+  ))
+
+
+pivot_data_region <- pivot_data_region %>%
+  rename(yearonly = year)
+
+df_increg$yearonly = as.numeric(df_increg$yearonly)
+pivot_data_region$yearonly = as.numeric(pivot_data_region$yearonly)
+
+df_increg$region = as.character(df_increg$region)
+pivot_data_region$region = as.character(pivot_data_region$region)
+
+df_increg <- left_join(df_increg, pivot_data_region, by = c("yearonly", "region"))
+
+df_increg$inc = df_increg$total_deaths/df_increg$pop*100000
+
+resultado_aggregate <- aggregate(df_increg$inc, by = list(region = df_increg$region), FUN = mean)
+
+
+g12 <- ggplot(df_increg, aes(x = yearonly, y = inc, group = region, color = region, fill=region)) +
+  geom_bar(stat="identity", position = "dodge", color="black")+
+  labs(y = "Deaths per 100.000 inhab.", x = "Period", title = "") +
+  theme_minimal() + 
+  theme(legend.position = "bottom",
+    plot.title = element_text(size = 12, face = "bold"),
+    axis.line = element_line(colour = "black"),
+    axis.title = element_text(size = 12, colour = "black", face = "bold"),
+    axis.text = element_text(colour = "black", size = 12),
+    legend.title = element_text(face = "bold", size = 12),
+    legend.text = element_text(size = 12),
+    panel.border = element_blank())+
+  scale_fill_brewer(palette = "Greys",name = "")+
+  scale_x_continuous(breaks = 2014:2021)+
+  scale_y_continuous(expand = expansion(mult = 0))
+
+g12
+
+#Numbers
+
+filtered_data <- df_increg %>% filter(region == "Nordeste")
+mean(df_increg$inc, na.rm=TRUE)
+
+df_increg_pivot <- df_increg %>%
+  pivot_wider(names_from = region,
+              id_cols = "yearonly",
+              values_from = c(total_deaths, pop)) 
+
+df_grouped <- df_increg %>%
+  group_by(region) %>%
+  summarize(variacao_inc = ((last(inc) - first(inc)) / first(inc)) * 100)
+
+
+filtered_datars = df_increg %>% filter(region=="South")
+lm(inc~yearonly, data=filtered_datars)
+confint(lm(inc~yearonly, data=filtered_datars))
+
+relative_variationrs <- filtered_datars %>%
+  mutate(relative_variation = (inc - first(inc)) / first(inc) * 100) %>%
+  filter(yearonly >= 2015 & yearonly <= 2021)
+
+mean(relative_variationrs$relative_variation)
+
+filtered_datant = df_increg %>% filter(region=="Northeast")
+lm(inc~yearonly, data=filtered_datant)
+confint(lm(inc~yearonly, data=filtered_datant))
+
+relative_variationnt <- filtered_datant %>%
+  mutate(relative_variation = (inc - first(inc)) / first(inc) * 100) %>%
+  filter(yearonly >= 2015 & yearonly <= 2021)
+
+```
+
+Third chat
+
+```{r}
+
+#Chart sex
+
+df_sexo <- df %>%
+  filter(!(sexo == "Ignored")) %>%
+  group_by(yearonly, sexo) %>%
+  summarize(total_deaths = n()) %>%
+  as.data.frame()
+
+df_sexo <- df_sexo %>%
+  group_by(yearonly) %>%
+  mutate(prop = total_deaths / sum(total_deaths)*100)
+
+df_sexo$prop <- round(df_sexo$prop,0)
+
+g13 <- ggplot(df_sexo, aes(x = factor(yearonly), y = prop, fill = sexo)) +
+  geom_bar(stat = "identity", position = "stack", color = "black") +
+  geom_text(aes(label = paste0(prop,"%")), position = position_stack(vjust = 0.5), color = "black", size = 4) +
+  labs(y = "Proportion of deaths", x = "Period", title = "") +
+  scale_fill_manual(name = "", values = c("Male" = "grey55", "Female" = "white")) +
+  theme_minimal() + 
+  theme(legend.position = "bottom",
+        plot.title = element_text(size = 12, face = "bold"),
+        axis.line = element_line(colour = "black"),
+        axis.title = element_text(size = 12, colour = "black", face = "bold"),
+        axis.text = element_text(colour = "black", size = 12),
+        legend.title = element_text(face = "bold", size = 12),
+        legend.text = element_text(size = 12),
+        panel.border = element_blank()) 
+
+
+#Tests
+
+chisq.test(df$sexo,df$yearonly)
+
+tapply(df_sexo$prop, df_sexo$sexo, mean)
+
+table(df$sexo,df1$yearonly)
+
+
+```
+
+Fourth chart
+
+```{r}
+# 
+df_age <- df %>% 
+  group_by(yearonly, age_range) %>%
+  summarize(total_deaths = n()) %>% as.data.frame()
+
+pivot_data <- df1 %>% select(year,age_18,age_1859,age_60) %>% 
+  pivot_longer(
+    cols = c(age_18,age_1859,age_60),
+    names_to = "age_range",
+    values_to = "pop"
+  ) %>% as.data.frame()
+
+pivot_data <- pivot_data %>%
+  rename(yearonly = year)
+
+pivot_data <- pivot_data %>%
+  mutate(age_range = case_when(
+    age_range == "age_1859" ~ "18-59 years",
+    age_range == "age_18" ~ "<18 years",
+    age_range == "age_60" ~ "60≥ years",
+    TRUE ~ age_range  # Mantém outros valores inalterados
+  ))
+
+df_age <- df_age %>%
+  mutate(age_range = case_when(
+    age_range == "18-59 years" ~ "18-59 years",
+    age_range == "<18 years" ~ "<18 years",
+    age_range == "60≥ years" ~ "60≥ years",
+    TRUE ~ age_range  # Mantém outros valores inalterados
+  ))
+
+
+df_age <- left_join(pivot_data, df_age, by = c("yearonly", "age_range"))
+
+df_age$inc = df_age$total_deaths/df_age$pop*100000
+
+g11 <- ggplot(df_age, aes(x = yearonly, y = inc, 
+                            group = age_range,
+                            color = age_range,
+                            fill = age_range)) +
+  geom_bar(stat = "identity", position = "dodge", color = "black") +
+  labs(y = "Deaths per 100.000 inhabs", x = "Period", title = "") +
+  theme_minimal() + 
+  theme(legend.position = "bottom",
+        plot.title = element_text(size = 12, face = "bold"),
+        axis.line = element_line(colour = "black"),
+        axis.title = element_text(size = 12, colour = "black", face = "bold"),
+        axis.text = element_text(colour = "black", size = 12),
+        legend.title = element_text(face = "bold", size = 12),
+        legend.text = element_text(size = 12),
+        panel.border = element_blank()) +
+  scale_fill_brewer(palette = "Greys", name = "") +
+  scale_y_continuous(expand = expansion(mult = 0)) +
+  scale_x_continuous(breaks = unique(df_age$yearonly))
+
+g11
+
+
+#Numbers
+
+filtered_data18 = df_age %>% filter(age_range=="<18 years")
+summary(lm(inc~yearonly, data=filtered_data18))
+confint(lm(inc~yearonly, data=filtered_data18))
+
+relative_variation18 <- filtered_data18 %>%
+  mutate(relative_variation = (inc - first(inc)) / first(inc) * 100) %>%
+  filter(yearonly >= 2015 & yearonly <= 2021)
+
+mean(relative_variation18$relative_variation)
+
+filtered_data1859 = df_age %>% filter(age_range=="18-59 years")
+summary(lm(inc~yearonly, data=filtered_data1859))
+confint(lm(inc~yearonly, data=filtered_data1859))
+
+relative_variation1859 <- filtered_data1859 %>%
+  mutate(relative_variation = (inc - first(inc)) / first(inc) * 100) %>%
+  filter(yearonly >= 2015 & yearonly <= 2021)
+
+mean(relative_variation1859$relative_variation)
+
+filtered_data60 = df_age %>% filter(age_range=="60≥ years")
+summary(lm(inc~yearonly, data=filtered_data60))
+confint(lm(inc~yearonly, data=filtered_data60))
+
+relative_variation60<- filtered_data60 %>%
+  mutate(relative_variation = (inc - first(inc)) / first(inc) * 100) %>%
+  filter(yearonly >= 2015 & yearonly <= 2021)
+
+mean(relative_variation60$relative_variation)
+
+df_prop <- df_age %>%
+  group_by(yearonly) %>%
+  mutate(prop_age_range = total_deaths / sum(total_deaths))
+```
+
+Fifth and sixth (group) charts
+
+```{r}
+
+df_summary = df %>% filter(!(lococor=="Ignored"))
+
+contagem_casos <- df_summary %>%
+  group_by(yearonly, lococor) %>%
+  summarize(count = n()) %>%
+  pivot_wider(names_from = lococor, values_from = count, names_prefix = "count_") %>%
+  ungroup()  
+
+
+df_summary <- df_summary %>%
+  mutate(lococor = case_when(
+    lococor == "Ignored or others" ~ "Ignored",
+    lococor == "Home" ~ "Home",
+    lococor == "Hospital" ~ "Hospital",
+    lococor == "Other health establishment" ~ "Other health facilities",
+    lococor == "Public way" ~ "Public way",
+    TRUE ~ lococor  # Mantém outros valores inalterados
+  ))
+
+df_summary <- df_summary %>%
+  mutate(lococor = case_when(
+    lococor == "Other" ~ "Other",
+    TRUE ~ lococor  # Mantém outros valores inalterados
+  ))
+
+df_summary$lococor <- factor(df_summary$lococor, levels = c("Other", "Hospital", "Home", "Other health facilities", "Public way"))
+
+# Criar o gráfico de área
+grafico_area <- ggplot(df_summary, aes(x = factor(yearonly), fill = lococor)) +
+  geom_bar(position = "fill", color = "black", width = 0.5) +
+  scale_y_continuous(labels = scales::percent) +
+  labs(y = "Proportion of deaths", x = "Period", title = "", fill = "") +
+  scale_fill_brewer(palette = "Greys") +
+  scale_x_discrete(breaks = unique(df_summary$yearonly)) +  # Definindo os breaks do eixo x
+  theme_minimal() + 
+  theme(legend.position = "bottom",
+        plot.title = element_text(size = 12, face = "bold"),
+        axis.line = element_line(colour = "black"),
+        axis.title = element_text(size = 12, colour = "black", face = "bold"),
+        axis.text = element_text(colour = "black", size = 12),
+        legend.title = element_text(face = "bold", size = 12),
+        legend.text = element_text(size = 12),
+        panel.border = element_blank())
+
+grafico_area
+
+graf <- df_summary %>%
+  group_by(yearonly, lococor) %>%
+  summarize(total_ocorrencias = n()) %>%
+  ungroup() %>%
+  group_by(yearonly) %>%
+  mutate(prop_ocorrencias = total_ocorrencias / sum(total_ocorrencias)*100) #Proportions: lococor/ano
+
+
+tapply(graf$prop_ocorrencia, graf$yearonly, mean)
+
+filtered_places = df_summary %>% filter(lococor=="Other health facilities")
+filtered_places = filtered_places %>% 
+  group_by(yearonly) %>% 
+  summarise(cases=n())
+
+summary(lm(cases~yearonly, data=filtered_places))
+confint(lm(cases~yearonly, data=filtered_places))
+
+relative_variationplaces<- filtered_places %>%
+  mutate(relative_variation = (cases - first(cases)) / first(cases) * 100) %>%
+  filter(yearonly >= 2015 & yearonly <= 2021)
+
+mean(relative_variation60$relative_variation)
+
+###################################################### Numbers
+
+filtered_home = df_summary %>% filter(lococor=="Home")
+filtered_home = filtered_home %>% 
+  group_by(yearonly) %>% 
+  summarise(cases=n())
+
+summary(lm(cases~yearonly, data=filtered_home))
+confint(lm(cases~yearonly, data=filtered_home))
+
+relative_variationhome <- filtered_home %>%
+  mutate(relative_variation = (cases - first(cases)) / first(cases) * 100) %>%
+  filter(yearonly >= 2015 & yearonly <= 2021)
+
+mean(relative_variationplaces$relative_variation)
+
+###################################################### Numbers
+
+df_prop <- df_age %>%
+  group_by(yearonly) %>%
+  mutate(prop_age_range = total_deaths / sum(total_deaths))
+
+#### Chart 5 - Figures a-d
+
+summary_data2 <- df_summary %>% filter(!(region=="Foreigne"|region=="Ignored")) 
+
+prop_table <- summary_data2 %>%
+  group_by(region, lococor) %>%
+  summarise(count = n()) %>%
+  group_by(region) %>%
+  mutate(prop = (count / sum(count))*100) %>%
+  ungroup()
+
+prop_mean <- prop_table %>%
+  group_by(region, lococor) %>%
+  summarise(mean_prop = mean(prop))
+
+
+
+grafico_area1 <-
+  ggplot(summary_data2, aes(x = region, fill = lococor)) +
+  geom_bar(position = "fill", color="black", width = 0.7) +
+  labs(y = "Proportion of deaths", x = "", title = "a. Region", fill = "") +
+  scale_fill_brewer(palette = "Greys") +
+  theme_minimal() + 
+  theme(legend.position = "bottom",
+  plot.title = element_text(size = 12, face = "bold",
+                            hjust = 0.5),
+  axis.line = element_line(colour = "black"),
+  axis.title = element_text(size = 12, colour = "black", face = "bold"),
+  axis.text = element_text(colour = "black", size = 12),
+  legend.title = element_text(face = "bold", size = 12),
+  legend.text = element_text(size = 12),
+  panel.border = element_blank())+
+  scale_y_continuous(expand = expansion(mult = 0))
+
+df_summary1 = df_summary %>% 
+  filter(!(sexo=="Ignored")) 
+
+prop_table_sex <- df_summary1 %>%
+  group_by(sexo, lococor) %>%
+  summarise(count = n()) %>%
+  group_by(sexo) %>%
+  mutate(prop = (count / sum(count))*100) %>%
+  ungroup()
+
+prop_mean_sex <- prop_table_sex %>%
+  group_by(sexo, lococor) %>%
+  summarise(mean_prop = mean(prop))
+
+grafico_area2 <-
+  ggplot(df_summary1, aes(x = sexo, fill = lococor)) +
+  geom_bar(position = "fill", color="black", width = 0.4) +
+  labs(title = "b. Gender",y = "Proportion of deaths", x = "", fill = "") +
+  scale_fill_brewer(palette = "Greys") +
+  theme_minimal() + 
+  theme(legend.position = "bottom",
+  plot.title = element_text(size = 12, face = "bold",hjust = 0.5),
+  axis.line = element_line(colour = "black"),
+  axis.title = element_text(size = 12, colour = "black", face = "bold"),
+  axis.text = element_text(colour = "black", size = 12),
+  legend.title = element_text(face = "bold", size = 12),
+  legend.text = element_text(size = 12),
+  panel.border = element_blank(),
+  plot.margin = unit(c(0, 0.8, 0, 0.8),
+                                "inches"))+
+  scale_y_continuous(expand = expansion(mult = 0))
+
+
+df_summary2 = df_summary %>% filter(age_range=="<18 years"|age_range=="18-59 years"|age_range=="60≥ years") %>% droplevels()
+
+prop_table_age <- df_summary2 %>%
+  group_by(age_range, lococor) %>%
+  summarise(count = n()) %>%
+  group_by(age_range) %>%
+  mutate(prop = (count / sum(count))*100) %>%
+  ungroup()
+
+prop_mean_age<- prop_table_age %>%
+  group_by(age_range, lococor) %>%
+  summarise(mean_prop = mean(prop))
+
+
+grafico_area3 <-
+  ggplot(df_summary2, aes(x = age_range, fill = lococor)) +
+  geom_bar(position = "fill", color="black", width = 0.4) +
+  labs(title = "c. Age range",y = "Proportion of deaths", x = "", fill = "") +
+  scale_fill_brewer(palette = "Greys") +
+  theme_minimal() + 
+  theme(legend.position = "bottom",
+  plot.title = element_text(size = 12, face = "bold",
+                            hjust = 0.5),
+  axis.line = element_line(colour = "black"),
+  axis.title = element_text(size = 12, colour = "black", face = "bold"),
+  axis.text = element_text(colour = "black", size = 12),
+  legend.title = element_text(face = "bold", size = 12),
+  legend.text = element_text(size = 12),
+  panel.border = element_blank(),
+  plot.margin = unit(c(0, 0.8, 0, 0.8),
+                                "inches"))+
+  scale_y_continuous(expand = expansion(mult = 0))
+
+df_summary3 = df_summary %>%
+  filter((esc_edit=="< 9 anos"|
+           esc_edit=="≥ 9 anos")&idade_quantidade>17.99) %>% droplevels()
+
+prop_table_esc <- df_summary3 %>%
+  group_by(esc_edit, lococor) %>%
+  summarise(count = n()) %>%
+  group_by(esc_edit) %>%
+  mutate(prop = (count / sum(count))*100) %>%
+  ungroup()
+
+prop_mean_esc <- prop_table_esc %>%
+  group_by(esc_edit, lococor) %>%
+  summarise(mean_prop = mean(prop))
+
+grafico_area4 <-
+  ggplot(df_summary3, aes(x = esc_edit, fill = lococor)) +
+  geom_bar(position = "fill", color="black", width = 0.4) +
+  labs(title = "d. Education attainment", y = "Proportion of deaths", 
+       x = "", fill = "") +
+  scale_fill_brewer(palette = "Greys") +
+  theme_minimal() + 
+  theme(legend.position = "bottom",
+  plot.title = element_text(size = 12, face = "bold",
+                            hjust= 0.5),
+  axis.line = element_line(colour = "black"),
+  axis.title = element_text(size = 12, colour = "black", face = "bold"),
+  axis.text = element_text(colour = "black", size = 12),
+  legend.title = element_text(face = "bold", size = 12),
+  legend.text = element_text(size = 12),
+  panel.border = element_blank(),
+  plot.margin = unit(c(0, 0.8, 0, 0.8),
+                                "inches"))+
+  scale_y_continuous(expand = expansion(mult = 0))+
+  scale_x_discrete(labels=c("< 9 anos" = "< 9 years", "≥ 9 anos"  = "≥ 9 years"))
+
+ggarrange(grafico_area1, grafico_area2, grafico_area3, grafico_area4, ncol=2, nrow=2, common.legend = TRUE, legend="bottom")
+```
