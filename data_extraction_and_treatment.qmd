@@ -1,0 +1,143 @@
+---
+title: "Dados "
+author: "Marcos Antunes"
+format: html
+editor: visual
+---
+
+{r}
+pacman::p_load(gtsummary,dplyr,markdown,forecast,nortest,gtsummary,janitor,vroom)
+
+Quarto
+
+{r, message=FALSE,echo=FALSE, warning=FALSE}
+#filter function
+
+filter_rows <- function(data) {
+  df_1 <- filter(data, grepl("J45", data$CAUSABAS))
+  df_2 <- filter(data, grepl("J46", data$CAUSABAS))
+  result <- bind_rows(df_1, df_2) %>% distinct()
+  return(result)
+}
+
+
+df_2014 <- vroom("https://diaad.s3.sa-east-1.amazonaws.com/sim/Mortalidade_Geral_2014.csv")
+df_2014 <- filter_rows(df_2014)
+
+df_2015 <- vroom("https://diaad.s3.sa-east-1.amazonaws.com/sim/Mortalidade_Geral_2015.csv")
+df_2015 <- filter_rows(df_2015)
+
+df_2016 <- vroom("https://diaad.s3.sa-east-1.amazonaws.com/sim/Mortalidade_Geral_2016.csv")
+df_2016 <- filter_rows(df_2016)
+
+df_2017 <- vroom("https://diaad.s3.sa-east-1.amazonaws.com/sim/Mortalidade_Geral_2017.csv")
+df_2017 <- filter_rows(df_2017)
+
+df_2018 <- vroom("https://diaad.s3.sa-east-1.amazonaws.com/sim/Mortalidade_Geral_2018.csv")
+df_2018 <- filter_rows(df_2018)
+
+df_2019 <- vroom("https://diaad.s3.sa-east-1.amazonaws.com/sim/Mortalidade_Geral_2019.csv")
+df_2019 <- filter_rows(df_2019)
+
+df_2020 <- vroom("https://diaad.s3.sa-east-1.amazonaws.com/sim/Mortalidade_Geral_2020.csv")
+df_2020 <- filter_rows(df_2020)
+
+df_2021 <- vroom("https://s3.sa-east-1.amazonaws.com/ckan.saude.gov.br/SIM/Mortalidade_Geral_2021.csv")
+df_2021 <- filter_rows(df_2021)
+
+df_2014_2021 = rbind(df_2014,df_2015,df_2016,df_2017,df_2018,df_2019,df_2020,df_2021)
+df_2014_2021 = clean_names(df_2014_2021)
+
+df_2014_2021$contador = rep(1:19105,1)
+
+rm(df_2014,df_2015,df_2016,df_2017,df_2018,df_2019,df_2020,df_2021)
+
+#Creating a vector with state codes
+uf_codes <- c("11" = "RO",
+                 "12" = "AC",
+                 "13" = "AM",
+                 "14" = "RR",
+                 "15" = "PA",
+                 "16" = "AP",
+                 "17" = "TO",
+                 "21" = "MA",
+                 "22" = "PI",
+                 "23" = "CE",
+                 "24" = "RN",
+                 "25" = "PB",
+                 "26" = "PE",
+                 "27" = "AL",
+                 "28" = "SE",
+                 "29" = "BA",
+                 "31" = "MG",
+                 "32" = "ES",
+                 "33" = "RJ",
+                 "35" = "SP",
+                 "41" = "PR",
+                 "42" = "SC",
+                 "43" = "RS",
+                 "50" = "MS",
+                 "51" = "MT",
+                 "52" = "GO",
+                 "53" = "DF")
+             
+df_2014_2021  = df_2014_2021 %>%
+  mutate(natural_cond = ifelse(substr(natural, 1, 1) == 8,
+                               uf_codes[substr(natural, 2, 3)],
+                               'Foreigne'))
+
+
+# Assigning the value 'ignored' to NA values
+df_2014_2021$natural_cond[is.na(df_2014_2021$natural_cond)] <- 'Ignored'
+
+# To factor
+df_2014_2021$sexo <- factor(df_2014_2021$sexo, levels = c(0,1,2), 
+                   labels = c("Ignored", 
+                              "Male",
+                              "Female")) #corrigido sexo
+
+
+df_2014_2021$racacor <- factor(df_2014_2021$racacor, levels = c(1,2,3,4,5), 
+                   labels = c("White", 
+                              "Black",
+                              "Yellow",
+                              "Brown",
+                              "Indigenous"))
+
+
+df_2014_2021$racacor[is.na(df_2014_2021$racacor)] <- 'Ignored'
+
+df_2014_2021$esc2010 <- factor(df_2014_2021$esc2010, levels = c(0,1,2,3,4,5,9), 
+                   labels = c("No schooling", 
+                              "1st to 4th grade",
+                              "5th to 8th grade",
+                              "Former high school",
+                              "Incomplete higher education",
+                              "Complete higher education",
+                              "Ignored"))
+
+df_2014_2021$esc2010[is.na(df_2014_2021$esc2010)] = 'Ignored'
+
+
+df_2014_2021$lococor <- factor(df_2014_2021$lococor, levels = c(1,2,3,4,5,6,9), 
+                   labels = c("Hospital", 
+                              "Other health establishment",
+                              "Home",
+                              "Public way",
+                              "Other",
+                              "Other",
+                              "Ignored"))
+
+df_2014_2021$lococor[is.na(df_2014_2021$lococor)] = 'Ignored'
+
+
+df_2014_2021$assistmed <- factor(df_2014_2021$assistmed, levels = c(1,2,9), 
+                   labels = c("With assistance", 
+                              "Without assistance",
+                              "Ignored"))
+
+df_2014_2021$assistmed[is.na(df_2014_2021$assistmed)] = 'Ignored'
+
+write.csv(df_2014_2021,"df_20211.csv")
+
+
