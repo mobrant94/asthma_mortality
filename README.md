@@ -8,22 +8,22 @@ This repository provides functions for importing and analyzing data from the Bra
 ## Packages
 "The packages used in this study are a combination of tools for data manipulation, analysis, and visualization in R. Here's a brief description of each:
 
--pacman: An R package manager that facilitates the installation, loading, and updating of packages.
--gtsummary: A tool for quickly summarizing datasets into beautiful, publication-ready tables.
--dplyr: A data manipulation library, providing functions for filtering, selecting, transforming, and aggregating data efficiently.
--markdown: A markup language that allows for easy creation of formatted documents, including the ability to embed R code and results elegantly.
--forecast: A package for time series modeling and forecasting.
--nortest: Provides normality tests in R.
--janitor: Facilitates data cleaning in R, providing functions for renaming columns, removing duplicate values, and more.
--vroom: A fast package for reading and writing data files in CSV format.
--ggplot2: A popular library for creating graphics in R, allowing the construction of complex and custom plots.
--ggpubr: A package that provides functions to facilitate the creation of publication-style graphics in ggplot2.
--tidyverse: A collection of R packages that work well together for data manipulation and visualization.
--readxl: A tool for importing data from Excel files directly into R.
--lattice: A library for creating lattice graphics in R.
--scales: A package that provides functions for adjusting the scale of axes in plots, aiding in the formatting of axis labels and intervals.
--RColorBrewer: A package that provides useful color palettes for graphics in R.
--epitools: A package for epidemiological and public health statistics in R.
+-pacman: An R package manager that facilitates the installation, loading, and updating of packages
+-gtsummary: A tool for quickly summarizing datasets into beautiful, publication-ready tables
+-dplyr: A data manipulation library, providing functions for filtering, selecting, transforming, and aggregating data efficiently
+-markdown: A markup language that allows for easy creation of formatted documents, including the ability to embed R code and results elegantly
+-forecast: A package for time series modeling and forecasting
+-nortest: Provides normality tests in R
+-janitor: Facilitates data cleaning in R, providing functions for renaming columns, removing duplicate values, and more
+-vroom: A fast package for reading and writing data files in CSV format
+-ggplot2: A popular library for creating graphics in R, allowing the construction of complex and custom plots
+-ggpubr: A package that provides functions to facilitate the creation of publication-style graphics in ggplot2
+-tidyverse: A collection of R packages that work well together for data manipulation and visualization
+-readxl: A tool for importing data from Excel files directly into R
+-lattice: A library for creating lattice graphics in R
+-scales: A package that provides functions for adjusting the scale of axes in plots, aiding in the formatting of axis labels and intervals
+-RColorBrewer: A package that provides useful color palettes for graphics in R
+-epitools: A package for epidemiological and public health statistics in R
 
 ##Linear regression
 Additionally, we employed linear regression as a statistical technique to model the relationship between an independent variable and a dependent variable. It's a way to understand how a change in the independent variable affects the dependent variable. Linear regression is represented by the equation:
@@ -52,6 +52,6 @@ The data dictionary can be accessed at the following link:
 -https://opendatasus.saude.gov.br/dataset/sim/resource/b894426e-83dc-4703-91f8-fe90d9b7f8f0.
 
 Population data were calculated based on the 2010 and 2022 censuses available at the following links:
-2010 - https://www.ibge.gov.br/estatisticas/sociais/populacao/9662-censo-demografico-2010.html
-2022 - https://www.ibge.gov.br/estatisticas/sociais/trabalho/22827-censo-demografico-2022.html
+2010 - https://www.ibge.gov.br/estatisticas/sociais/populacao/9662-censo-demografico-2010.html.
+2022 - https://www.ibge.gov.br/estatisticas/sociais/trabalho/22827-censo-demografico-2022.html.
 
