@@ -6,7 +6,7 @@ Authors: Marcos Antunes, Jordana Henz, Mariana Boeira, Simoni Soares, Frederico 
 This repository provides functions for importing and analyzing data from the Brazilian mortality information system.
 
 ## Packages
-"The packages used in this study are a combination of tools for data manipulation, analysis, and visualization in R. Here's a brief description of each:
+The packages used in this study are a combination of tools for data manipulation, analysis, and visualization in R. Here's a brief description of each:
 
 pacman: An R package manager that facilitates the installation, loading, and updating of packages,
 gtsummary: A tool for quickly summarizing datasets into beautiful, publication-ready tables,
